@@ -64,15 +64,29 @@ export async function getFactions(): Promise<Faction[]> {
     if (!res.ok) throw new Error('Failed to fetch factions');
     const data = await res.json();
     // The API returns catalogues which represent factions
-    return (data.catalogues || data || []).map((item: any) => ({
-      id: item.id || item.gameSystemId || item.name,
-      name: item.name || item.gameSystemName,
+    const items: ApiCatalogueItem[] = Array.isArray(data.catalogues)
+      ? data.catalogues
+      : Array.isArray(data)
+      ? (data as ApiCatalogueItem[])
+      : [];
+    if (items.length === 0) return DEFAULT_FACTIONS;
+    return items.map((item) => ({
+      id: item.id ?? item.gameSystemId ?? item.name ?? '',
+      name: item.name ?? item.gameSystemName ?? '',
       parentId: item.parentId,
     }));
   } catch (err) {
     console.error('Failed to fetch factions from API, using defaults:', err);
     return DEFAULT_FACTIONS;
   }
+}
+
+interface ApiCatalogueItem {
+  id?: string;
+  gameSystemId?: string;
+  name?: string;
+  gameSystemName?: string;
+  parentId?: string;
 }
 
 const DEFAULT_FACTIONS: Faction[] = [

@@ -106,6 +106,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRosters() {
   const ctx = useContext(RosterContext);
   if (!ctx) throw new Error('useRosters must be used within RosterProvider');

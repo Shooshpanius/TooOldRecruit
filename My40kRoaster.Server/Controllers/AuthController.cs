@@ -52,7 +52,9 @@ namespace My40kRoaster.Server.Controllers
 
         private string GenerateJwtToken(User user)
         {
-            var jwtKey = config["Jwt:Key"] ?? "default-secret-key-for-dev-32chars!!";
+            var jwtKey = config["Jwt:Key"];
+            if (string.IsNullOrEmpty(jwtKey))
+                jwtKey = "default-secret-key-for-dev-32chars!!";
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var claims = new[]

@@ -11,7 +11,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=rosters.db"));
 
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "default-secret-key-for-dev-32chars!!";
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtKey))
+{
+    if (builder.Environment.IsProduction())
+        throw new InvalidOperationException("Jwt:Key configuration is required in production.");
+    jwtKey = "default-secret-key-for-dev-32chars!!";
+}
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
