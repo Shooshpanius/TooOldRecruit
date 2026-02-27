@@ -2,6 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useRosters } from '../contexts/RosterContext';
 
+const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
+
 export function RosterDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -62,13 +64,18 @@ export function RosterDetailPage() {
           </div>
           <div className="form-group">
             <label>Лимит очков</label>
-            <input
-              type="number"
-              value={pointsLimit}
-              onChange={e => setPointsLimit(Number(e.target.value))}
-              className="form-input"
-              min="1"
-            />
+            <div className="points-selector">
+              {POINTS_OPTIONS.map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`points-option ${pointsLimit === p ? 'active' : ''}`}
+                  onClick={() => setPointsLimit(p)}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
           <button onClick={handleSave} disabled={saving} className="btn btn-primary">
             {saving ? 'Сохранение...' : 'Сохранить'}

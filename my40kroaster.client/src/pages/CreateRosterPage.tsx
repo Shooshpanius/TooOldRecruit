@@ -4,7 +4,7 @@ import { useRosters } from '../contexts/RosterContext';
 import { getFactions } from '../services/api';
 import type { Faction } from '../types';
 
-const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500, 3000];
+const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
 
 export function CreateRosterPage() {
   const navigate = useNavigate();

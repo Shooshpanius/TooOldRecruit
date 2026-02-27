@@ -13,6 +13,7 @@ namespace My40kRoaster.Server.Controllers
     [Authorize]
     public class RostersController(AppDbContext db) : ControllerBase
     {
+        private static readonly int[] AllowedPointsLimits = [500, 1000, 1500, 2000, 2500];
         private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
         [HttpGet]
@@ -57,6 +58,8 @@ namespace My40kRoaster.Server.Controllers
         [HttpPost]
         public async Task<ActionResult<RosterDto>> CreateRoster([FromBody] CreateRosterRequest request)
         {
+            if (!AllowedPointsLimits.Contains(request.PointsLimit))
+                return BadRequest($"Лимит очков должен быть одним из: {string.Join(", ", AllowedPointsLimits)}");
             var userId = GetUserId();
             var roster = new Roster
             {
@@ -84,6 +87,8 @@ namespace My40kRoaster.Server.Controllers
         [HttpPut("{id}")]
         public async Task<ActionResult<RosterDto>> UpdateRoster(string id, [FromBody] UpdateRosterRequest request)
         {
+            if (!AllowedPointsLimits.Contains(request.PointsLimit))
+                return BadRequest($"Лимит очков должен быть одним из: {string.Join(", ", AllowedPointsLimits)}");
             var userId = GetUserId();
             var roster = await db.Rosters.FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
             if (roster == null) return NotFound();
