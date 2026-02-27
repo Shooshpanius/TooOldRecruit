@@ -25,6 +25,7 @@ body {
   color: var(--text);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   min-height: 100vh;
+  width: 100%;
 }
 
 .container {
@@ -446,4 +447,45 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .container {
+    padding: 0.75rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .roster-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .page-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .roster-meta {
+    flex-direction: column;
+  }
+
+  .points-selector {
+    gap: 0.4rem;
+  }
+
+  .points-option {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.9rem;
+  }
 }
