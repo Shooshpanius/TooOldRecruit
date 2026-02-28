@@ -1,7 +1,7 @@
 import type { Faction } from '../types';
 
 const API_BASE = '/api';
-const WH40K_API = 'https://api.wh40kcards.ru';
+const WH40K_API = 'https://api.wh40kcards.ru/scalar/bsdata';
 
 // Auth
 export async function loginWithGoogle(idToken: string) {
@@ -60,7 +60,7 @@ export async function deleteRoster(token: string, id: string) {
 // External API
 export async function getFactions(): Promise<Faction[]> {
   try {
-    const res = await fetch(`${WH40K_API}/bsdata/catalogues`);
+    const res = await fetch(`${WH40K_API}/catalogues`);
     if (!res.ok) throw new Error('Failed to fetch factions');
     const data = await res.json();
     // The API returns catalogues which represent factions

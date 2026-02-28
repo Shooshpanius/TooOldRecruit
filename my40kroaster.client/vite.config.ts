@@ -61,7 +61,7 @@ export default defineConfig({
                 target,
                 secure: false
             },
-            '^/bsdata': {
+            '^/scalar/bsdata': {
                 target: 'https://api.wh40kcards.ru',
                 changeOrigin: true,
                 secure: false
