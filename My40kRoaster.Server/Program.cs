@@ -51,7 +51,7 @@ builder.Services.AddCors(options =>
 // HttpClient for external API proxy
 builder.Services.AddHttpClient("wh40kapi", client =>
 {
-    client.BaseAddress = new Uri("https://api.wh40kcards.ru/scalar/bsdata/");
+    client.BaseAddress = new Uri("https://api.wh40kcards.ru/api/bsdata/");
 });
 
 var app = builder.Build();

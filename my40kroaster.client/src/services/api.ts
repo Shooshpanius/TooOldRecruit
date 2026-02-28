@@ -1,7 +1,7 @@
 import type { Faction } from '../types';
 
 const API_BASE = '/api';
-const WH40K_API = 'https://api.wh40kcards.ru/api/bsdata';
+const WH40K_API = '/api/bsdata';
 
 // Auth
 export async function loginWithGoogle(idToken: string) {
