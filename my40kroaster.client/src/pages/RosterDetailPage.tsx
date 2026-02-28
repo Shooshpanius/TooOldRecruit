@@ -115,7 +115,7 @@ export function RosterDetailPage() {
               <ul className="roster-units-list">
                 {rosterUnits.map((unit) => (
                   <li key={unit.entryId} className="roster-unit-item">
-                    <span className="roster-unit-type">{unit.type}</span>
+                    <span className="roster-unit-type">{unit.entryType}</span>
                     <span className="roster-unit-name">{unit.name}</span>
                     <button
                       className="btn btn-danger btn-sm"

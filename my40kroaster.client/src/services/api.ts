@@ -92,7 +92,8 @@ interface ApiCatalogueItem {
 interface ApiUnitItem {
   id?: string;
   name?: string;
-  type?: string;
+  entryType?: string;
+  type?: string;      // fallback for older API responses
   category?: string;
   categoryName?: string;
 }
@@ -118,24 +119,24 @@ const DEFAULT_FACTIONS: Faction[] = [
 ];
 
 const DEFAULT_UNITS: Unit[] = [
-  { id: 'unit-1', name: 'Chapter Master', type: 'HQ' },
-  { id: 'unit-2', name: 'Captain', type: 'HQ' },
-  { id: 'unit-3', name: 'Librarian', type: 'HQ' },
-  { id: 'unit-4', name: 'Chaplain', type: 'HQ' },
-  { id: 'unit-5', name: 'Intercessor Squad', type: 'Troops' },
-  { id: 'unit-6', name: 'Tactical Squad', type: 'Troops' },
-  { id: 'unit-7', name: 'Scout Squad', type: 'Troops' },
-  { id: 'unit-8', name: 'Terminator Squad', type: 'Elites' },
-  { id: 'unit-9', name: 'Sternguard Veterans', type: 'Elites' },
-  { id: 'unit-10', name: 'Dreadnought', type: 'Elites' },
-  { id: 'unit-11', name: 'Assault Squad', type: 'Fast Attack' },
-  { id: 'unit-12', name: 'Bike Squad', type: 'Fast Attack' },
-  { id: 'unit-13', name: 'Land Speeder', type: 'Fast Attack' },
-  { id: 'unit-14', name: 'Devastator Squad', type: 'Heavy Support' },
-  { id: 'unit-15', name: 'Predator', type: 'Heavy Support' },
-  { id: 'unit-16', name: 'Land Raider', type: 'Heavy Support' },
-  { id: 'unit-17', name: 'Rhino', type: 'Dedicated Transport' },
-  { id: 'unit-18', name: 'Drop Pod', type: 'Dedicated Transport' },
+  { id: 'unit-1', name: 'Chapter Master', entryType: 'HQ' },
+  { id: 'unit-2', name: 'Captain', entryType: 'HQ' },
+  { id: 'unit-3', name: 'Librarian', entryType: 'HQ' },
+  { id: 'unit-4', name: 'Chaplain', entryType: 'HQ' },
+  { id: 'unit-5', name: 'Intercessor Squad', entryType: 'Troops' },
+  { id: 'unit-6', name: 'Tactical Squad', entryType: 'Troops' },
+  { id: 'unit-7', name: 'Scout Squad', entryType: 'Troops' },
+  { id: 'unit-8', name: 'Terminator Squad', entryType: 'Elites' },
+  { id: 'unit-9', name: 'Sternguard Veterans', entryType: 'Elites' },
+  { id: 'unit-10', name: 'Dreadnought', entryType: 'Elites' },
+  { id: 'unit-11', name: 'Assault Squad', entryType: 'Fast Attack' },
+  { id: 'unit-12', name: 'Bike Squad', entryType: 'Fast Attack' },
+  { id: 'unit-13', name: 'Land Speeder', entryType: 'Fast Attack' },
+  { id: 'unit-14', name: 'Devastator Squad', entryType: 'Heavy Support' },
+  { id: 'unit-15', name: 'Predator', entryType: 'Heavy Support' },
+  { id: 'unit-16', name: 'Land Raider', entryType: 'Heavy Support' },
+  { id: 'unit-17', name: 'Rhino', entryType: 'Dedicated Transport' },
+  { id: 'unit-18', name: 'Drop Pod', entryType: 'Dedicated Transport' },
 ];
 
 export async function getUnits(factionId: string): Promise<Unit[]> {
@@ -152,7 +153,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
     return items.map((item) => ({
       id: item.id ?? item.name ?? '',
       name: item.name ?? '',
-      type: item.type ?? item.category ?? item.categoryName ?? 'Other',
+      entryType: item.entryType ?? item.type ?? item.category ?? item.categoryName ?? 'Other',
     }));
   } catch (err) {
     console.error('Failed to fetch units from API, using defaults:', err);

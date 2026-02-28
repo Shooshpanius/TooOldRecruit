@@ -24,8 +24,8 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd }: AddUnit
   }, [factionId]);
 
   const grouped = units.reduce<Record<string, Unit[]>>((acc, unit) => {
-    if (!acc[unit.type]) acc[unit.type] = [];
-    acc[unit.type].push(unit);
+    if (!acc[unit.entryType]) acc[unit.entryType] = [];
+    acc[unit.entryType].push(unit);
     return acc;
   }, {});
 
