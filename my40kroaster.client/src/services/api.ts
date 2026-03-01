@@ -57,6 +57,26 @@ export async function deleteRoster(token: string, id: string) {
   if (!res.ok) throw new Error('Failed to delete roster');
 }
 
+export async function getRosterUnits(token: string, rosterId: string) {
+  const res = await fetch(`${API_BASE}/rosters/${rosterId}/units`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch roster units');
+  return res.json();
+}
+
+export async function updateRosterUnits(token: string, rosterId: string, units: unknown) {
+  const res = await fetch(`${API_BASE}/rosters/${rosterId}/units`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(units),
+  });
+  if (!res.ok) throw new Error('Failed to update roster units');
+}
+
 // External API
 export async function getFactions(): Promise<Faction[]> {
   try {

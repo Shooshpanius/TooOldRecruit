@@ -1,15 +1,31 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRosters } from '../contexts/RosterContext';
+import { useAuth } from '../contexts/AuthContext';
 import { AddUnitModal } from '../components/AddUnitModal';
 import type { RosterUnit, UnitGroup } from '../types';
+import * as api from '../services/api';
 
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
+
+function loadLocalUnits(rosterId: string): UnitGroup[] {
+  try {
+    const data = localStorage.getItem(`roster_units_${rosterId}`);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalUnits(rosterId: string, units: UnitGroup[]) {
+  localStorage.setItem(`roster_units_${rosterId}`, JSON.stringify(units));
+}
 
 export function RosterDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { rosters, editRoster, removeRoster } = useRosters();
+  const { token } = useAuth();
   const roster = rosters.find(r => r.id === id);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(roster?.name || '');
@@ -18,6 +34,27 @@ export function RosterDetailPage() {
   const [unitAddTarget, setUnitAddTarget] = useState<{ groupId: string | null }>({ groupId: null });
   const [addingUnit, setAddingUnit] = useState(false);
   const [unitGroups, setUnitGroups] = useState<UnitGroup[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (token) {
+      api.getRosterUnits(token, id).then(setUnitGroups).catch(err => {
+        console.error('Failed to load roster units:', err);
+        setUnitGroups([]);
+      });
+    } else {
+      setUnitGroups(loadLocalUnits(id));
+    }
+  }, [id, token]);
+
+  const persistUnits = useCallback((groups: UnitGroup[]) => {
+    if (!id) return;
+    if (token) {
+      api.updateRosterUnits(token, id, groups).catch(console.error);
+    } else {
+      saveLocalUnits(id, groups);
+    }
+  }, [id, token]);
 
   if (!roster) {
     return (
@@ -136,7 +173,11 @@ export function RosterDetailPage() {
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
-                          onClick={() => setUnitGroups(prev => prev.filter(g => g.id !== group.id))}
+                          onClick={() => {
+                            const updated = unitGroups.filter(g => g.id !== group.id);
+                            setUnitGroups(updated);
+                            persistUnits(updated);
+                          }}
                         >
                           ✕
                         </button>
@@ -153,12 +194,14 @@ export function RosterDetailPage() {
                             )}
                             <button
                               className="btn btn-danger btn-sm"
-                              onClick={() => setUnitGroups(prev =>
-                                prev.map(g => g.id === group.id
+                              onClick={() => {
+                                const updated = unitGroups.map(g => g.id === group.id
                                   ? { ...g, units: g.units.filter(u => u.entryId !== unit.entryId) }
                                   : g
-                                )
-                              )}
+                                );
+                                setUnitGroups(updated);
+                                persistUnits(updated);
+                              }}
                             >
                               ✕
                             </button>
@@ -179,16 +222,17 @@ export function RosterDetailPage() {
               onClose={() => setAddingUnit(false)}
               onAdd={unit => {
                 const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };
+                let updated: UnitGroup[];
                 if (unitAddTarget.groupId === null) {
-                  setUnitGroups(prev => [...prev, { id: crypto.randomUUID(), units: [rosterUnit] }]);
+                  updated = [...unitGroups, { id: crypto.randomUUID(), units: [rosterUnit] }];
                 } else {
-                  setUnitGroups(prev =>
-                    prev.map(g => g.id === unitAddTarget.groupId
-                      ? { ...g, units: [...g.units, rosterUnit] }
-                      : g
-                    )
+                  updated = unitGroups.map(g => g.id === unitAddTarget.groupId
+                    ? { ...g, units: [...g.units, rosterUnit] }
+                    : g
                   );
                 }
+                setUnitGroups(updated);
+                persistUnits(updated);
                 setAddingUnit(false);
               }}
             />

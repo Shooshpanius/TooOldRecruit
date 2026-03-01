@@ -61,6 +61,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+    // Add UnitsJson column for existing databases (idempotent)
+    try
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE Rosters ADD COLUMN UnitsJson TEXT NOT NULL DEFAULT '[]'");
+    }
+    catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column name"))
+    {
+        // Column already exists, no action needed
+    }
 }
 
 app.UseDefaultFiles();

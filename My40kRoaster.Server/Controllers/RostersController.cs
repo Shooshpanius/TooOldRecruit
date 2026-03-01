@@ -118,5 +118,26 @@ namespace My40kRoaster.Server.Controllers
             await db.SaveChangesAsync();
             return NoContent();
         }
+
+        [HttpGet("{id}/units")]
+        public async Task<IActionResult> GetRosterUnits(string id)
+        {
+            var userId = GetUserId();
+            var roster = await db.Rosters.FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
+            if (roster == null) return NotFound();
+            return Content(roster.UnitsJson, "application/json");
+        }
+
+        [HttpPut("{id}/units")]
+        public async Task<IActionResult> UpdateRosterUnits(string id, [FromBody] System.Text.Json.JsonElement units)
+        {
+            var userId = GetUserId();
+            var roster = await db.Rosters.FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
+            if (roster == null) return NotFound();
+            roster.UnitsJson = units.GetRawText();
+            roster.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
     }
 }
