@@ -24,7 +24,7 @@ export interface Faction {
 export interface Unit {
   id: string;
   name: string;
-  entryType: string;
+  category: string;
 }
 
 export interface RosterUnit extends Unit {
