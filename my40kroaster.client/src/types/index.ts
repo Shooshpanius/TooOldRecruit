@@ -31,3 +31,8 @@ export interface Unit {
 export interface RosterUnit extends Unit {
   entryId: string;
 }
+
+export interface UnitGroup {
+  id: string;
+  units: RosterUnit[];
+}

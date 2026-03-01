@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useRosters } from '../contexts/RosterContext';
 import { AddUnitModal } from '../components/AddUnitModal';
-import type { RosterUnit } from '../types';
+import type { RosterUnit, UnitGroup } from '../types';
 
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
 
@@ -15,8 +15,9 @@ export function RosterDetailPage() {
   const [name, setName] = useState(roster?.name || '');
   const [pointsLimit, setPointsLimit] = useState(roster?.pointsLimit || 2000);
   const [saving, setSaving] = useState(false);
+  const [unitAddTarget, setUnitAddTarget] = useState<{ groupId: string | null }>({ groupId: null });
   const [addingUnit, setAddingUnit] = useState(false);
-  const [rosterUnits, setRosterUnits] = useState<RosterUnit[]>([]);
+  const [unitGroups, setUnitGroups] = useState<UnitGroup[]>([]);
 
   if (!roster) {
     return (
@@ -105,30 +106,70 @@ export function RosterDetailPage() {
           <div className="units-section">
             <div className="section-header">
               <h2>Отряды</h2>
-              <button className="btn btn-primary btn-sm" onClick={() => setAddingUnit(true)}>+ Добавить отряд</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { setUnitAddTarget({ groupId: null }); setAddingUnit(true); }}>+ Добавить отряд</button>
             </div>
-            {rosterUnits.length === 0 ? (
+            {unitGroups.length === 0 ? (
               <div className="empty-state">
                 <p>Отряды ещё не добавлены</p>
               </div>
             ) : (
-              <ul className="roster-units-list">
-                {rosterUnits.map((unit) => (
-                  <li key={unit.entryId} className="roster-unit-item">
-                    <span className="roster-unit-type">{unit.category}</span>
-                    <span className="roster-unit-name">{unit.name}</span>
-                    {unit.cost !== undefined && (
-                      <span className="unit-cost">{unit.cost} pts</span>
+              <div className="unit-groups">
+                {unitGroups.map((group) => {
+                  if (group.units.length === 0) return null;
+                  const primaryUnit = group.units[0];
+                  return (
+                  <div key={group.id} className="unit-group">
+                    <div className="unit-group-header">
+                      <div className="unit-group-info">
+                        <span className="unit-group-primary-name">{primaryUnit.name}</span>
+                        <span className="roster-unit-type">{primaryUnit.category}</span>
+                        {primaryUnit.cost !== undefined && (
+                          <span className="unit-cost">{primaryUnit.cost} pts</span>
+                        )}
+                      </div>
+                      <div className="unit-group-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setUnitAddTarget({ groupId: group.id }); setAddingUnit(true); }}
+                        >
+                          + Присоединить
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => setUnitGroups(prev => prev.filter(g => g.id !== group.id))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    {group.units.slice(1).length > 0 && (
+                      <ul className="unit-group-attached">
+                        {group.units.slice(1).map((unit) => (
+                          <li key={unit.entryId} className="unit-group-attached-item">
+                            <span className="roster-unit-type">{unit.category}</span>
+                            <span className="unit-group-attached-name">{unit.name}</span>
+                            {unit.cost !== undefined && (
+                              <span className="unit-cost">{unit.cost} pts</span>
+                            )}
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => setUnitGroups(prev =>
+                                prev.map(g => g.id === group.id
+                                  ? { ...g, units: g.units.filter(u => u.entryId !== unit.entryId) }
+                                  : g
+                                )
+                              )}
+                            >
+                              ✕
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => setRosterUnits(prev => prev.filter(u => u.entryId !== unit.entryId))}
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                  );
+                })}
+              </div>
             )}
           </div>
           {addingUnit && (
@@ -136,7 +177,20 @@ export function RosterDetailPage() {
               factionId={roster.factionId}
               factionName={roster.factionName}
               onClose={() => setAddingUnit(false)}
-              onAdd={unit => { setRosterUnits(prev => [...prev, { ...unit, entryId: crypto.randomUUID() }]); setAddingUnit(false); }}
+              onAdd={unit => {
+                const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };
+                if (unitAddTarget.groupId === null) {
+                  setUnitGroups(prev => [...prev, { id: crypto.randomUUID(), units: [rosterUnit] }]);
+                } else {
+                  setUnitGroups(prev =>
+                    prev.map(g => g.id === unitAddTarget.groupId
+                      ? { ...g, units: [...g.units, rosterUnit] }
+                      : g
+                    )
+                  );
+                }
+                setAddingUnit(false);
+              }}
             />
           )}
         </div>
