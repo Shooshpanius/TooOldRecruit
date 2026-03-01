@@ -26,6 +26,7 @@ export interface Unit {
   name: string;
   category: string;
   cost?: number;
+  isLeader?: boolean;
 }
 
 export interface RosterUnit extends Unit {

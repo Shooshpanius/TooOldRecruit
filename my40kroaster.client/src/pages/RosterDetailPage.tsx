@@ -219,6 +219,7 @@ export function RosterDetailPage() {
             <AddUnitModal
               factionId={roster.factionId}
               factionName={roster.factionName}
+              attachMode={unitAddTarget.groupId !== null}
               onClose={() => setAddingUnit(false)}
               onAdd={unit => {
                 const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };

@@ -7,9 +7,10 @@ interface AddUnitModalProps {
   factionName: string;
   onClose: () => void;
   onAdd: (unit: Unit) => void;
+  attachMode?: boolean;
 }
 
-export function AddUnitModal({ factionId, factionName, onClose, onAdd }: AddUnitModalProps) {
+export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [openType, setOpenType] = useState<string | null>(null);
@@ -23,7 +24,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd }: AddUnit
     });
   }, [factionId]);
 
-  const grouped = units.reduce<Record<string, Unit[]>>((acc, unit) => {
+  const filteredUnits = attachMode ? units.filter(u => u.isLeader) : units;
+
+  const grouped = filteredUnits.reduce<Record<string, Unit[]>>((acc, unit) => {
     if (!acc[unit.category]) acc[unit.category] = [];
     acc[unit.category].push(unit);
     return acc;
@@ -39,7 +42,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd }: AddUnit
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Добавить отряд — {factionName}</h2>
+          <h2>{attachMode ? `Присоединить лидера — ${factionName}` : `Добавить отряд — ${factionName}`}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">

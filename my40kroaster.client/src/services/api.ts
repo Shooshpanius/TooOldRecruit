@@ -109,6 +109,13 @@ interface ApiCatalogueItem {
   parentId?: string;
 }
 
+interface ApiInfoLink {
+  id?: string;
+  name?: string;
+  type?: string;
+  targetId?: string;
+}
+
 interface ApiUnitItem {
   id?: string;
   name?: string;
@@ -123,6 +130,7 @@ interface ApiUnitItem {
   points?: number | string;
   pts?: number | string;
   pointCost?: number | string;
+  infoLinks?: ApiInfoLink[];
 }
 
 const DEFAULT_FACTIONS: Faction[] = [
@@ -198,7 +206,8 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         const raw = pts?.value ?? item.costs[0]?.value;
         cost = toNum(raw);
       } else if (item.costs !== undefined) cost = toNum(item.costs);
-      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category, cost };
+      const isLeader = item.infoLinks?.some(l => l.type === 'rule' && l.name === 'Leader') ?? false;
+      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category, cost, isLeader };
     });
   } catch (err) {
     console.error('Failed to fetch units from API, using defaults:', err);
