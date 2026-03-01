@@ -1,4 +1,4 @@
-import type { Faction } from '../types';
+import type { Faction, Unit } from '../types';
 
 const API_BASE = '/api';
 const WH40K_API = '/api/bsdata';
@@ -89,6 +89,17 @@ interface ApiCatalogueItem {
   parentId?: string;
 }
 
+interface ApiUnitItem {
+  id?: string;
+  name?: string;
+  entryType?: string;
+  type?: string;      // fallback for older API responses
+  category?: string;
+  categoryName?: string;
+  categories?: Array<{ id?: string; name?: string; primary?: boolean }>;
+  unitCategories?: Array<{ id?: string; name?: string; primary?: boolean }>;
+}
+
 const DEFAULT_FACTIONS: Faction[] = [
   { id: 'space-marines', name: 'Space Marines' },
   { id: 'chaos-space-marines', name: 'Chaos Space Marines' },
@@ -108,3 +119,49 @@ const DEFAULT_FACTIONS: Faction[] = [
   { id: 'blood-angels', name: 'Blood Angels' },
   { id: 'space-wolves', name: 'Space Wolves' },
 ];
+
+const DEFAULT_UNITS: Unit[] = [
+  { id: 'unit-1', name: 'Chapter Master', category: 'HQ' },
+  { id: 'unit-2', name: 'Captain', category: 'HQ' },
+  { id: 'unit-3', name: 'Librarian', category: 'HQ' },
+  { id: 'unit-4', name: 'Chaplain', category: 'HQ' },
+  { id: 'unit-5', name: 'Intercessor Squad', category: 'Troops' },
+  { id: 'unit-6', name: 'Tactical Squad', category: 'Troops' },
+  { id: 'unit-7', name: 'Scout Squad', category: 'Troops' },
+  { id: 'unit-8', name: 'Terminator Squad', category: 'Elites' },
+  { id: 'unit-9', name: 'Sternguard Veterans', category: 'Elites' },
+  { id: 'unit-10', name: 'Dreadnought', category: 'Elites' },
+  { id: 'unit-11', name: 'Assault Squad', category: 'Fast Attack' },
+  { id: 'unit-12', name: 'Bike Squad', category: 'Fast Attack' },
+  { id: 'unit-13', name: 'Land Speeder', category: 'Fast Attack' },
+  { id: 'unit-14', name: 'Devastator Squad', category: 'Heavy Support' },
+  { id: 'unit-15', name: 'Predator', category: 'Heavy Support' },
+  { id: 'unit-16', name: 'Land Raider', category: 'Heavy Support' },
+  { id: 'unit-17', name: 'Rhino', category: 'Dedicated Transport' },
+  { id: 'unit-18', name: 'Drop Pod', category: 'Dedicated Transport' },
+];
+
+export async function getUnits(factionId: string): Promise<Unit[]> {
+  try {
+    const res = await fetch(`${WH40K_API}/catalogues/${encodeURIComponent(factionId)}/units`);
+    if (!res.ok) throw new Error('Failed to fetch units');
+    const data = await res.json();
+    const items: ApiUnitItem[] = Array.isArray(data.units)
+      ? data.units
+      : Array.isArray(data)
+      ? (data as ApiUnitItem[])
+      : [];
+    if (items.length === 0) return DEFAULT_UNITS;
+    return items.map((item) => {
+      const cats = item.categories ?? item.unitCategories;
+      const category =
+        cats?.find(c => c.primary)?.name ??
+        cats?.[0]?.name ??
+        item.category ?? item.categoryName ?? item.entryType ?? item.type ?? 'Other';
+      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category };
+    });
+  } catch (err) {
+    console.error('Failed to fetch units from API, using defaults:', err);
+    return DEFAULT_UNITS;
+  }
+}

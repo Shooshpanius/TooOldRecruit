@@ -20,3 +20,13 @@ export interface Faction {
   name: string;
   parentId?: string;
 }
+
+export interface Unit {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export interface RosterUnit extends Unit {
+  entryId: string;
+}
