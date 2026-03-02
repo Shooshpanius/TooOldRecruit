@@ -186,6 +186,23 @@ export function RosterDetailPage() {
                           +
                         </button>
                         <button
+                          className="btn btn-secondary btn-sm"
+                          aria-label="Дублировать"
+                          disabled={roster ? totalCost + group.units.reduce((s, u) => s + (u.cost ?? 0), 0) > roster.pointsLimit : true}
+                          onClick={() => {
+                            const duplicated = {
+                              ...group,
+                              id: crypto.randomUUID(),
+                              units: group.units.map(u => ({ ...u, entryId: crypto.randomUUID() }))
+                            };
+                            const updated = [...unitGroups, duplicated];
+                            setUnitGroups(updated);
+                            persistUnits(updated);
+                          }}
+                        >
+                          ⎘
+                        </button>
+                        <button
                           className="btn btn-danger btn-sm"
                           onClick={() => {
                             const updated = unitGroups.filter(g => g.id !== group.id);
