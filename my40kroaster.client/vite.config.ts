@@ -13,8 +13,8 @@ export default defineConfig({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
             manifest: {
-                name: 'My 40k Roaster',
-                short_name: '40kRoaster',
+                name: 'Too Old Recruit',
+                short_name: 'TooOldRecruit',
                 description: 'Warhammer 40,000 10th Edition Roster Builder',
                 theme_color: '#1a1a2e',
                 background_color: '#1a1a2e',

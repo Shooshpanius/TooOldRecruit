@@ -24,7 +24,7 @@ export function HomePage() {
   return (
     <div className="container">
       <header className="app-header">
-        <h1>⚔️ My 40k Roaster</h1>
+        <h1>⚔️ Too Old Recruit</h1>
         <p className="subtitle">Warhammer 40,000 — 10-я редакция</p>
         {user ? (
           <div className="user-info">
