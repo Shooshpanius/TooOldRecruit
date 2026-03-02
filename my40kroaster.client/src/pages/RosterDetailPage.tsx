@@ -35,6 +35,11 @@ export function RosterDetailPage() {
   const [addingUnit, setAddingUnit] = useState(false);
   const [unitGroups, setUnitGroups] = useState<UnitGroup[]>([]);
 
+  const totalCost = unitGroups.reduce((sum, group) =>
+    sum + group.units.reduce((s, u) => s + (u.cost ?? 0), 0), 0
+  );
+  const remainingPoints = roster ? roster.pointsLimit - totalCost : 0;
+
   useEffect(() => {
     if (!id) return;
     if (token) {
@@ -136,6 +141,12 @@ export function RosterDetailPage() {
               <span className="meta-value points-badge">{roster.pointsLimit} очков</span>
             </div>
             <div className="meta-item">
+              <span className="meta-label">Использовано очков</span>
+              <span className={`meta-value points-badge ${totalCost > roster.pointsLimit ? 'points-over-limit' : ''}`}>
+                {totalCost} / {roster.pointsLimit}
+              </span>
+            </div>
+            <div className="meta-item">
               <span className="meta-label">Создан</span>
               <span className="meta-value">{new Date(roster.createdAt).toLocaleDateString('ru-RU')}</span>
             </div>
@@ -221,6 +232,7 @@ export function RosterDetailPage() {
               factionName={roster.factionName}
               attachMode={unitAddTarget.groupId !== null}
               onClose={() => setAddingUnit(false)}
+              remainingPoints={remainingPoints}
               onAdd={unit => {
                 const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };
                 let updated: UnitGroup[];

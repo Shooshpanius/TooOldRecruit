@@ -238,6 +238,10 @@ body {
   white-space: nowrap;
 }
 
+.points-over-limit {
+  background: var(--danger);
+}
+
 .roster-card-body {
   margin-bottom: 0.75rem;
 }

@@ -8,9 +8,10 @@ interface AddUnitModalProps {
   onClose: () => void;
   onAdd: (unit: Unit) => void;
   attachMode?: boolean;
+  remainingPoints?: number;
 }
 
-export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode }: AddUnitModalProps) {
+export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [openType, setOpenType] = useState<string | null>(null);
@@ -64,7 +65,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   </button>
                   {openType === type && (
                     <ul className="accordion-body">
-                      {grouped[type].map(unit => (
+                      {grouped[type].map(unit => {
+                        const canAdd = remainingPoints === undefined || unit.cost === undefined || unit.cost <= remainingPoints;
+                        return (
                         <li key={unit.id} className="unit-item">
                           <span className="unit-name">{unit.name}</span>
                           {unit.cost !== undefined && (
@@ -73,11 +76,13 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => onAdd(unit)}
+                            disabled={!canAdd}
                           >
                             + Добавить
                           </button>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
