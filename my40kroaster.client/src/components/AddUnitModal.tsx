@@ -69,16 +69,19 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                         const canAdd = remainingPoints === undefined || unit.cost === undefined || unit.cost <= remainingPoints;
                         return (
                         <li key={unit.id} className="unit-item">
-                          <span className="unit-name">{unit.name}</span>
-                          {unit.cost !== undefined && (
-                            <span className="unit-cost">{unit.cost} pts</span>
-                          )}
+                          <div className="unit-info">
+                            <span className="unit-name">{unit.name}</span>
+                            {unit.cost !== undefined && (
+                              <span className="unit-cost">{unit.cost} pts</span>
+                            )}
+                          </div>
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => onAdd(unit)}
                             disabled={!canAdd}
+                            aria-label={attachMode ? 'Присоединить' : 'Добавить'}
                           >
-                            + Добавить
+                            +
                           </button>
                         </li>
                         );

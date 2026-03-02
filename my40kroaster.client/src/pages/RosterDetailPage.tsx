@@ -170,17 +170,20 @@ export function RosterDetailPage() {
                     <div className="unit-group-header">
                       <div className="unit-group-info">
                         <span className="unit-group-primary-name">{primaryUnit.name}</span>
-                        <span className="roster-unit-type">{primaryUnit.category}</span>
-                        {primaryUnit.cost !== undefined && (
-                          <span className="unit-cost">{primaryUnit.cost} pts</span>
-                        )}
+                        <div className="unit-group-meta">
+                          <span className="roster-unit-type">{primaryUnit.category}</span>
+                          {primaryUnit.cost !== undefined && (
+                            <span className="unit-cost">{primaryUnit.cost} pts</span>
+                          )}
+                        </div>
                       </div>
                       <div className="unit-group-actions">
                         <button
                           className="btn btn-secondary btn-sm"
+                          aria-label="Присоединить"
                           onClick={() => { setUnitAddTarget({ groupId: group.id }); setAddingUnit(true); }}
                         >
-                          + Присоединить
+                          +
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
@@ -198,11 +201,15 @@ export function RosterDetailPage() {
                       <ul className="unit-group-attached">
                         {group.units.slice(1).map((unit) => (
                           <li key={unit.entryId} className="unit-group-attached-item">
-                            <span className="roster-unit-type">{unit.category}</span>
-                            <span className="unit-group-attached-name">{unit.name}</span>
-                            {unit.cost !== undefined && (
-                              <span className="unit-cost">{unit.cost} pts</span>
-                            )}
+                            <div className="unit-group-attached-info">
+                              <span className="unit-group-attached-name">{unit.name}</span>
+                              <div className="unit-group-meta">
+                                <span className="roster-unit-type">{unit.category}</span>
+                                {unit.cost !== undefined && (
+                                  <span className="unit-cost">{unit.cost} pts</span>
+                                )}
+                              </div>
+                            </div>
                             <button
                               className="btn btn-danger btn-sm"
                               onClick={() => {
