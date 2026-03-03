@@ -188,7 +188,18 @@ export function RosterDetailPage() {
                         <button
                           className="btn btn-secondary btn-sm"
                           aria-label="Дублировать"
-                          disabled={roster ? totalCost + group.units.reduce((s, u) => s + (u.cost ?? 0), 0) > roster.pointsLimit : true}
+                          disabled={(() => {
+                            // Проверка лимита очков
+                            const groupCost = group.units.reduce((s, u) => s + (u.cost ?? 0), 0);
+                            if (roster && totalCost + groupCost > roster.pointsLimit) return true;
+                            // Проверка ограничения maxInRoster при дублировании
+                            const primary = group.units[0];
+                            if (primary?.maxInRoster !== undefined) {
+                              const currentCount = unitGroups.filter(g => g.units.length > 0 && g.units[0].id === primary.id).length;
+                              if (currentCount >= primary.maxInRoster) return true;
+                            }
+                            return false;
+                          })()}
                           onClick={() => {
                             const duplicated = {
                               ...group,
@@ -257,6 +268,7 @@ export function RosterDetailPage() {
               attachMode={unitAddTarget.groupId !== null}
               onClose={() => setAddingUnit(false)}
               remainingPoints={remainingPoints}
+              currentUnitGroups={unitGroups}
               onAdd={unit => {
                 const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };
                 let updated: UnitGroup[];

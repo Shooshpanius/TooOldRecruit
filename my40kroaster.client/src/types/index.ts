@@ -27,6 +27,8 @@ export interface Unit {
   category: string;
   cost?: number;
   isLeader?: boolean;
+  // Максимальное количество отрядов данного типа в ростере (из API)
+  maxInRoster?: number;
 }
 
 export interface RosterUnit extends Unit {

@@ -600,6 +600,26 @@ body {
   white-space: nowrap;
 }
 
+/* Нижняя строка в списке отряда: счётчик ростера + кнопка */
+.unit-item-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* Счётчик X/maxInRoster — сколько отрядов данного типа уже в ростере */
+.unit-roster-count {
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+}
+
+.unit-roster-count--limit {
+  color: var(--danger, #e53e3e);
+  font-weight: 600;
+}
+
 /* Unit Groups */
 .unit-groups {
   display: flex;

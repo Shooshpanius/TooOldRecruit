@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Unit } from '../types';
+import type { Unit, UnitGroup } from '../types';
 import { getUnits } from '../services/api';
 
 interface AddUnitModalProps {
@@ -9,9 +9,11 @@ interface AddUnitModalProps {
   onAdd: (unit: Unit) => void;
   attachMode?: boolean;
   remainingPoints?: number;
+  // Текущие отряды в ростере — нужны для проверки лимита maxInRoster
+  currentUnitGroups?: UnitGroup[];
 }
 
-export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints }: AddUnitModalProps) {
+export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [openType, setOpenType] = useState<string | null>(null);
@@ -37,6 +39,13 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
 
   const toggleType = (type: string) => {
     setOpenType(prev => (prev === type ? null : type));
+  };
+
+  // Подсчёт количества отрядов данного типа (по id) уже в ростере.
+  // Первый элемент группы (units[0]) является основным отрядом и определяет тип группы.
+  const countInRoster = (unitId: string): number => {
+    if (!currentUnitGroups) return 0;
+    return currentUnitGroups.filter(g => g.units.length > 0 && g.units[0].id === unitId).length;
   };
 
   return (
@@ -67,6 +76,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                     <ul className="accordion-body">
                       {grouped[type].map(unit => {
                         const canAdd = remainingPoints === undefined || unit.cost === undefined || unit.cost <= remainingPoints;
+                        // Проверяем ограничение maxInRoster
+                        const inRoster = countInRoster(unit.id);
+                        const limitReached = unit.maxInRoster !== undefined && inRoster >= unit.maxInRoster;
                         return (
                         <li key={unit.id} className="unit-item">
                           <div className="unit-info">
@@ -75,14 +87,22 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                               <span className="unit-cost">{unit.cost} pts</span>
                             )}
                           </div>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => onAdd(unit)}
-                            disabled={!canAdd}
-                            aria-label={attachMode ? 'Присоединить' : 'Добавить'}
-                          >
-                            +
-                          </button>
+                          <div className="unit-item-footer">
+                            {/* Показываем сколько отрядов данного типа уже в ростере */}
+                            {unit.maxInRoster !== undefined && (
+                              <span className={`unit-roster-count${limitReached ? ' unit-roster-count--limit' : ''}`}>
+                                {inRoster}/{unit.maxInRoster}
+                              </span>
+                            )}
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => onAdd(unit)}
+                              disabled={!canAdd || limitReached}
+                              aria-label={attachMode ? 'Присоединить' : 'Добавить'}
+                            >
+                              +
+                            </button>
+                          </div>
                         </li>
                         );
                       })}

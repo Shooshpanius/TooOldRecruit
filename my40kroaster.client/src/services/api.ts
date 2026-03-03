@@ -131,6 +131,8 @@ interface ApiUnitItem {
   pts?: number | string;
   pointCost?: number | string;
   infoLinks?: ApiInfoLink[];
+  // Максимальное количество отрядов данного типа в ростере
+  maxInRoster?: number | string;
 }
 
 const DEFAULT_FACTIONS: Faction[] = [
@@ -207,7 +209,9 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         cost = toNum(raw);
       } else if (item.costs !== undefined) cost = toNum(item.costs);
       const isLeader = item.infoLinks?.some(l => l.type === 'rule' && l.name === 'Leader') ?? false;
-      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category, cost, isLeader };
+      // Парсим maxInRoster — максимальное количество отрядов данного типа в ростере
+      const maxInRoster = item.maxInRoster !== undefined ? toNum(item.maxInRoster) : undefined;
+      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category, cost, isLeader, maxInRoster };
     });
   } catch (err) {
     console.error('Failed to fetch units from API, using defaults:', err);
