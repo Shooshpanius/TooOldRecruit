@@ -30,9 +30,16 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
 
   const filteredUnits = attachMode ? units.filter(u => u.isLeader) : units;
 
-  const visibleUnits = allowLegends
+  const visibleUnits = (allowLegends
     ? filteredUnits
-    : filteredUnits.filter(u => !u.name.toLowerCase().includes('[legends]'));
+    : filteredUnits.filter(u => !u.name.toLowerCase().includes('[legends]'))
+  ).filter(u => {
+    const cat = u.category?.toLowerCase();
+    if (cat === 'other') return false;
+    if (cat === 'upgrade') return false;
+    if (cat === 'model' && u.cost == null) return false;
+    return true;
+  });
 
   const grouped = visibleUnits.reduce<Record<string, Unit[]>>((acc, unit) => {
     if (!acc[unit.category]) acc[unit.category] = [];
