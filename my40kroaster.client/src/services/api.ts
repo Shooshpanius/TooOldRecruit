@@ -181,6 +181,15 @@ const DEFAULT_UNITS: Unit[] = [
   { id: 'unit-18', name: 'Drop Pod', category: 'Dedicated Transport', cost: 65 },
 ];
 
+/** Forces a complete re-import of unit data (including per-unit cost tiers) for a faction. */
+export async function forceImportUnits(factionId: string): Promise<{ imported: number }> {
+  const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/units/import`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to force-import units');
+  return res.json();
+}
+
 export async function getUnits(factionId: string): Promise<Unit[]> {
   try {
     const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/units`);

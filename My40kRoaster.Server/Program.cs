@@ -102,18 +102,26 @@ using (var scope = app.Services.CreateScope())
             FOREIGN KEY (UnitId) REFERENCES BsDataUnits(Id) ON DELETE CASCADE
         )
         """);
-    // Idempotent migration: remove faction data cached before cost-tier support was added.
-    // Factions whose every unit has no cost tiers are deleted so they are re-imported
-    // with the current parser on next access.  After a successful re-import the faction
-    // will have cost tiers and will not be affected by subsequent runs of this statement.
+    // Schema migration tracking table
     db.Database.ExecuteSqlRaw("""
-        DELETE FROM BsDataUnits
-        WHERE FactionId NOT IN (
-            SELECT DISTINCT b.FactionId
-            FROM BsDataUnits b
-            INNER JOIN BsDataCostTiers ct ON ct.UnitId = b.Id
+        CREATE TABLE IF NOT EXISTS SchemaMigrations (
+            Name TEXT NOT NULL PRIMARY KEY
         )
         """);
+    // v2: Wipe all cached unit data so every faction is re-imported using the new
+    // FetchAndApplyCostTiersAsync logic which fetches per-unit cost tiers from the
+    // dedicated /units/{id}/cost-tiers endpoint.  Without this, factions cached
+    // before this feature was added (e.g. Death Guard) would keep serving
+    // Poxwalkers without any cost-tier data.
+    // INSERT OR IGNORE returns 1 the very first time (migration not yet applied)
+    // and 0 on every subsequent restart (already applied → no-op).
+    var v2IsNew = db.Database.ExecuteSqlRaw(
+        "INSERT OR IGNORE INTO SchemaMigrations (Name) VALUES ('v2_per_unit_cost_tiers')") > 0;
+    if (v2IsNew)
+    {
+        db.Database.ExecuteSqlRaw("DELETE FROM BsDataCostTiers");
+        db.Database.ExecuteSqlRaw("DELETE FROM BsDataUnits");
+    }
 }
 
 app.UseDefaultFiles();

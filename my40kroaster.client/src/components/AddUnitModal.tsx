@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Unit, UnitGroup, UnitCostBand } from '../types';
-import { getUnits } from '../services/api';
+import { getUnits, forceImportUnits } from '../services/api';
 
 interface AddUnitModalProps {
   factionId: string;
@@ -22,28 +22,44 @@ function bandForCount(bands: UnitCostBand[], count: number): UnitCostBand | unde
 export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups, allowLegends }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [openType, setOpenType] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   // Хранит выбранное количество моделей для отрядов с ценовыми диапазонами
   const [modelCounts, setModelCounts] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    getUnits(factionId).then(data => {
-      setUnits(data);
-      // Инициализируем количество моделей минимальным значением каждого диапазона
-      const init: Record<string, number> = {};
-      data.forEach(u => {
-        if (u.costBands && (u.costBands.length > 1 ||
-            (u.costBands.length === 1 && u.costBands[0].minModels !== u.costBands[0].maxModels))) {
-          init[u.id] = u.costBands[0].minModels;
-        }
-      });
-      setModelCounts(init);
-      setLoading(false);
-    }).catch(() => {
-      setLoading(false);
+  /** Applies fetched unit data to state. */
+  const applyUnitsData = (data: Unit[]) => {
+    setUnits(data);
+    // Инициализируем количество моделей минимальным значением каждого диапазона
+    const init: Record<string, number> = {};
+    data.forEach(u => {
+      if (u.costBands && (u.costBands.length > 1 ||
+          (u.costBands.length === 1 && u.costBands[0].minModels !== u.costBands[0].maxModels))) {
+        init[u.id] = u.costBands[0].minModels;
+      }
     });
+    setModelCounts(init);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getUnits(factionId)
+      .then(data => { if (!cancelled) applyUnitsData(data); })
+      .catch(err => console.error('Failed to load units:', err))
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [factionId]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    forceImportUnits(factionId)
+      .then(() => getUnits(factionId))
+      .then(data => applyUnitsData(data))
+      .catch(err => console.error('Failed to refresh unit data:', err))
+      .finally(() => setRefreshing(false));
+  };
 
   const filteredUnits = attachMode ? units.filter(u => u.isLeader) : units;
 
@@ -158,7 +174,17 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{attachMode ? `Присоединить лидера — ${factionName}` : `Добавить отряд — ${factionName}`}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <div className="modal-header-actions">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+              title="Обновить данные отрядов с сервера"
+            >
+              {refreshing ? '⏳' : '🔄'}
+            </button>
+            <button className="modal-close" onClick={onClose}>✕</button>
+          </div>
         </div>
         <div className="modal-search">
           <input

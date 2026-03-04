@@ -489,6 +489,12 @@ body {
   color: var(--gold);
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .modal-close {
   background: transparent;
   border: none;
