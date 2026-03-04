@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/My40kRoaster.Server/rosters.db-shm
+/My40kRoaster.Server/rosters.db-wal
