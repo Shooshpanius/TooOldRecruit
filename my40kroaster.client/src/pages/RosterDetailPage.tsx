@@ -3,10 +3,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRosters } from '../contexts/RosterContext';
 import { useAuth } from '../contexts/AuthContext';
 import { AddUnitModal } from '../components/AddUnitModal';
-import type { RosterUnit, UnitGroup } from '../types';
+import type { RosterUnit, UnitGroup, UnitCostBand } from '../types';
 import * as api from '../services/api';
 
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
+
+/** Выбирает ценовой диапазон для указанного количества моделей. */
+function bandForCount(bands: UnitCostBand[], count: number) {
+  return bands.find(b => count >= b.minModels && count <= b.maxModels);
+}
 
 function loadLocalUnits(rosterId: string): UnitGroup[] {
   try {
@@ -189,6 +194,14 @@ export function RosterDetailPage() {
                 {unitGroups.map((group) => {
                   if (group.units.length === 0) return null;
                   const primaryUnit = group.units[0];
+                  const applyModelCount = (newCount: number, newCost: number) => {
+                    const updated = unitGroups.map(g => g.id === group.id
+                      ? { ...g, units: [{ ...g.units[0], modelCount: newCount, cost: newCost }, ...g.units.slice(1)] }
+                      : g
+                    );
+                    setUnitGroups(updated);
+                    persistUnits(updated);
+                  };
                   return (
                   <div key={group.id} className="unit-group">
                     <div className="unit-group-header">
@@ -196,8 +209,34 @@ export function RosterDetailPage() {
                         <span className="unit-group-primary-name">{primaryUnit.name}</span>
                         <div className="unit-group-meta">
                           <span className="roster-unit-type">{primaryUnit.category}</span>
-                          {primaryUnit.modelCount !== undefined && (
-                            <span className="unit-model-count-badge">{primaryUnit.modelCount} мод.</span>
+                          {primaryUnit.costBands && primaryUnit.costBands.length > 1 && primaryUnit.modelCount !== undefined ? (
+                            <div className="unit-model-count-stepper">
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                aria-label="Уменьшить количество моделей"
+                                disabled={primaryUnit.modelCount <= Math.min(...primaryUnit.costBands.map(b => b.minModels))}
+                                onClick={() => {
+                                  const newCount = primaryUnit.modelCount! - 1;
+                                  const band = bandForCount(primaryUnit.costBands!, newCount);
+                                  if (band) applyModelCount(newCount, band.cost);
+                                }}
+                              >−</button>
+                              <span className="unit-model-count-badge">{primaryUnit.modelCount} мод.</span>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                aria-label="Увеличить количество моделей"
+                                disabled={primaryUnit.modelCount >= Math.max(...primaryUnit.costBands.map(b => b.maxModels))}
+                                onClick={() => {
+                                  const newCount = primaryUnit.modelCount! + 1;
+                                  const band = bandForCount(primaryUnit.costBands!, newCount);
+                                  if (band) applyModelCount(newCount, band.cost);
+                                }}
+                              >+</button>
+                            </div>
+                          ) : (
+                            primaryUnit.modelCount !== undefined && (
+                              <span className="unit-model-count-badge">{primaryUnit.modelCount} мод.</span>
+                            )
                           )}
                           {primaryUnit.cost !== undefined && (
                             <span className="unit-cost">{primaryUnit.cost} pts</span>

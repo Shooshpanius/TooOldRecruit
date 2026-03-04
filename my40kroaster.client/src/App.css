@@ -660,6 +660,13 @@ body {
   white-space: nowrap;
 }
 
+/* Степпер +/− количества моделей в карточке отряда */
+.unit-model-count-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
 /* Unit Groups */
 .unit-groups {
   display: flex;
