@@ -23,7 +23,7 @@ export async function getRosters(token: string) {
   return res.json();
 }
 
-export async function createRoster(token: string, data: { name: string; factionId: string; factionName: string; pointsLimit: number }) {
+export async function createRoster(token: string, data: { name: string; factionId: string; factionName: string; pointsLimit: number; allowLegends?: boolean }) {
   const res = await fetch(`${API_BASE}/rosters`, {
     method: 'POST',
     headers: {
@@ -36,7 +36,7 @@ export async function createRoster(token: string, data: { name: string; factionI
   return res.json();
 }
 
-export async function updateRoster(token: string, id: string, data: { name: string; pointsLimit: number }) {
+export async function updateRoster(token: string, id: string, data: { name: string; pointsLimit: number; allowLegends: boolean }) {
   const res = await fetch(`${API_BASE}/rosters/${id}`, {
     method: 'PUT',
     headers: {
