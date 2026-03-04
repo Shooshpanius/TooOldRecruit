@@ -52,15 +52,16 @@ namespace My40kRoaster.Server.Services
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
-                JsonElement arr;
-                if (root.TryGetProperty("units", out arr) && arr.ValueKind == JsonValueKind.Array)
+                if (root.ValueKind == JsonValueKind.Object
+                    && root.TryGetProperty("units", out var arr)
+                    && arr.ValueKind == JsonValueKind.Array)
                     items = JsonSerializer.Deserialize<List<ApiUnitItem>>(arr.GetRawText(), JsonOptions) ?? [];
                 else if (root.ValueKind == JsonValueKind.Array)
                     items = JsonSerializer.Deserialize<List<ApiUnitItem>>(json, JsonOptions) ?? [];
                 else
                     return [];
             }
-            catch (JsonException)
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
             {
                 return [];
             }
