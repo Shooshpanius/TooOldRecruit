@@ -7,6 +7,8 @@ namespace My40kRoaster.Server.Data
     {
         public DbSet<User> Users { get; set; }
         public DbSet<Roster> Rosters { get; set; }
+        public DbSet<BsDataUnit> BsDataUnits { get; set; }
+        public DbSet<BsDataCostTier> BsDataCostTiers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -18,6 +20,12 @@ namespace My40kRoaster.Server.Data
                 .HasOne(r => r.User)
                 .WithMany(u => u.Rosters)
                 .HasForeignKey(r => r.UserId);
+
+            modelBuilder.Entity<BsDataCostTier>()
+                .HasOne(t => t.Unit)
+                .WithMany(u => u.CostTiers)
+                .HasForeignKey(t => t.UnitId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using My40kRoaster.Server.Data;
+using My40kRoaster.Server.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +37,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddScoped<BsDataImportService>();
 
 // CORS for development
 builder.Services.AddCors(options =>
@@ -78,6 +80,28 @@ using (var scope = app.Services.CreateScope())
     {
         // Column already exists, no action needed
     }
+    // Ensure BsDataUnits and BsDataCostTiers tables exist for existing databases
+    db.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS BsDataUnits (
+            Id TEXT NOT NULL PRIMARY KEY,
+            FactionId TEXT NOT NULL,
+            Name TEXT NOT NULL,
+            Category TEXT NOT NULL,
+            Cost INTEGER NULL,
+            IsLeader INTEGER NOT NULL DEFAULT 0,
+            MaxInRoster INTEGER NULL
+        )
+        """);
+    db.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS BsDataCostTiers (
+            Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            UnitId TEXT NOT NULL,
+            MinModels INTEGER NOT NULL,
+            MaxModels INTEGER NOT NULL,
+            Points INTEGER NOT NULL,
+            FOREIGN KEY (UnitId) REFERENCES BsDataUnits(Id) ON DELETE CASCADE
+        )
+        """);
 }
 
 app.UseDefaultFiles();

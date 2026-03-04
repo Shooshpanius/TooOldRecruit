@@ -196,6 +196,9 @@ export function RosterDetailPage() {
                         <span className="unit-group-primary-name">{primaryUnit.name}</span>
                         <div className="unit-group-meta">
                           <span className="roster-unit-type">{primaryUnit.category}</span>
+                          {primaryUnit.modelCount !== undefined && (
+                            <span className="unit-model-count-badge">{primaryUnit.modelCount} мод.</span>
+                          )}
                           {primaryUnit.cost !== undefined && (
                             <span className="unit-cost">{primaryUnit.cost} pts</span>
                           )}

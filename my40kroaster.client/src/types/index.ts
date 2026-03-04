@@ -30,6 +30,16 @@ export interface Unit {
   isLeader?: boolean;
   // Максимальное количество отрядов данного типа в ростере (из API)
   maxInRoster?: number;
+  // Ценовые диапазоны для отрядов с переменным количеством моделей
+  costBands?: UnitCostBand[];
+  // Выбранное количество моделей (задаётся при добавлении в ростер)
+  modelCount?: number;
+}
+
+export interface UnitCostBand {
+  minModels: number;
+  maxModels: number;
+  cost: number;
 }
 
 export interface RosterUnit extends Unit {

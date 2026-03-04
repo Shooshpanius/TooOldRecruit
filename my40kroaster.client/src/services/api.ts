@@ -135,6 +135,9 @@ interface ApiUnitItem {
   infoLinks?: ApiInfoLink[];
   // Максимальное количество отрядов данного типа в ростере
   maxInRoster?: number | string;
+  // Ценовые диапазоны: [{minModels, maxModels, pts}]
+  costTiers?: Array<{ minModels?: number | string; maxModels?: number | string; pts?: number | string }>;
+  costBands?: Array<{ minModels?: number | string; maxModels?: number | string; pts?: number | string; cost?: number | string }>;
 }
 
 const DEFAULT_FACTIONS: Faction[] = [
@@ -213,7 +216,22 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
       const isLeader = item.infoLinks?.some(l => l.type === 'rule' && l.name === 'Leader') ?? false;
       // Парсим maxInRoster — максимальное количество отрядов данного типа в ростере
       const maxInRoster = item.maxInRoster !== undefined ? toNum(item.maxInRoster) : undefined;
-      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category, cost, isLeader, maxInRoster };
+      // Парсим ценовые диапазоны (costTiers / costBands)
+      const rawTiers = item.costTiers ?? item.costBands;
+      let costBands: import('../types').UnitCostBand[] | undefined;
+      if (Array.isArray(rawTiers) && rawTiers.length > 1) {
+        const parsed = rawTiers.map(t => ({
+          minModels: toNum(t.minModels) ?? 0,
+          maxModels: toNum(t.maxModels) ?? 0,
+          cost: toNum(t.pts ?? (t as { cost?: number | string }).cost) ?? 0,
+        })).filter(t => t.cost > 0);
+        if (parsed.length > 1) {
+          costBands = parsed;
+          // Используем стоимость минимального диапазона как базовую
+          if (cost === undefined) cost = parsed[0].cost;
+        }
+      }
+      return { id: item.id ?? item.name ?? '', name: item.name ?? '', category, cost, isLeader, maxInRoster, costBands };
     });
   } catch (err) {
     console.error('Failed to fetch units from API, using defaults:', err);

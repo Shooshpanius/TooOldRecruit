@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Unit, UnitGroup } from '../types';
+import type { Unit, UnitGroup, UnitCostBand } from '../types';
 import { getUnits } from '../services/api';
 
 interface AddUnitModalProps {
@@ -14,15 +14,30 @@ interface AddUnitModalProps {
   allowLegends?: boolean;
 }
 
+/** Выбирает ценовой диапазон для указанного количества моделей. */
+function bandForCount(bands: UnitCostBand[], count: number): UnitCostBand | undefined {
+  return bands.find(b => count >= b.minModels && count <= b.maxModels);
+}
+
 export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups, allowLegends }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [openType, setOpenType] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  // Хранит выбранное количество моделей для отрядов с ценовыми диапазонами
+  const [modelCounts, setModelCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     getUnits(factionId).then(data => {
       setUnits(data);
+      // Инициализируем количество моделей минимальным значением каждого диапазона
+      const init: Record<string, number> = {};
+      data.forEach(u => {
+        if (u.costBands && u.costBands.length > 1) {
+          init[u.id] = u.costBands[0].minModels;
+        }
+      });
+      setModelCounts(init);
       setLoading(false);
     }).catch(() => {
       setLoading(false);
@@ -67,17 +82,54 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
     : [];
 
   const renderUnitItem = (unit: Unit) => {
-    const canAdd = remainingPoints === undefined || unit.cost === undefined || unit.cost <= remainingPoints;
+    const hasBands = unit.costBands && unit.costBands.length > 1;
+    const selectedCount = hasBands ? (modelCounts[unit.id] ?? unit.costBands![0].minModels) : undefined;
+    const activeBand = hasBands ? bandForCount(unit.costBands!, selectedCount!) : undefined;
+    const effectiveCost = activeBand?.cost ?? unit.cost;
+
+    const canAdd = remainingPoints === undefined || effectiveCost === undefined || effectiveCost <= remainingPoints;
     const inRoster = countInRoster(unit.id);
     const limitReached = unit.maxInRoster !== undefined && inRoster >= unit.maxInRoster;
+
+    const handleAdd = () => {
+      onAdd({ ...unit, cost: effectiveCost, modelCount: selectedCount });
+    };
+
     return (
       <li key={unit.id} className="unit-item">
         <div className="unit-info">
           <span className="unit-name">{unit.name}</span>
-          {unit.cost !== undefined && (
-            <span className="unit-cost">{unit.cost} pts</span>
+          {effectiveCost !== undefined && (
+            <span className="unit-cost">{effectiveCost} pts</span>
           )}
         </div>
+        {hasBands && (
+          <div className="unit-model-count">
+            <label className="unit-model-count-label">
+              Моделей:
+              <select
+                className="unit-model-count-select"
+                value={selectedCount}
+                onChange={e => {
+                  const val = Number(e.target.value);
+                  setModelCounts(prev => ({ ...prev, [unit.id]: val }));
+                }}
+              >
+                {unit.costBands!.flatMap(band => {
+                  const options = [];
+                  for (let n = band.minModels; n <= band.maxModels; n++) {
+                    options.push(
+                      <option key={n} value={n}>
+                        {n} ({band.cost} pts)
+                      </option>
+                    );
+                  }
+                  return options;
+                })}
+              </select>
+            </label>
+          </div>
+        )}
         <div className="unit-item-footer">
           {unit.maxInRoster !== undefined && (
             <span className={`unit-roster-count${limitReached ? ' unit-roster-count--limit' : ''}`}>
@@ -86,7 +138,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
           )}
           <button
             className="btn btn-primary btn-sm"
-            onClick={() => onAdd(unit)}
+            onClick={handleAdd}
             disabled={!canAdd || limitReached}
             aria-label={attachMode ? 'Присоединить' : 'Добавить'}
           >
