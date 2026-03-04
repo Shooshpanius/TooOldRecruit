@@ -70,6 +70,14 @@ using (var scope = app.Services.CreateScope())
     {
         // Column already exists, no action needed
     }
+    try
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE Rosters ADD COLUMN AllowLegends INTEGER NOT NULL DEFAULT 0");
+    }
+    catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column name"))
+    {
+        // Column already exists, no action needed
+    }
 }
 
 app.UseDefaultFiles();

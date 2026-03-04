@@ -6,9 +6,9 @@ import * as api from '../services/api';
 interface RosterContextType {
   rosters: Roster[];
   loading: boolean;
-  addRoster: (data: { name: string; factionId: string; factionName: string; pointsLimit: number }) => Promise<Roster>;
+  addRoster: (data: { name: string; factionId: string; factionName: string; pointsLimit: number; allowLegends?: boolean }) => Promise<Roster>;
   removeRoster: (id: string) => Promise<void>;
-  editRoster: (id: string, data: { name: string; pointsLimit: number }) => Promise<void>;
+  editRoster: (id: string, data: { name: string; pointsLimit: number; allowLegends: boolean }) => Promise<void>;
   refreshRosters: () => Promise<void>;
 }
 
@@ -52,7 +52,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     refreshRosters();
   }, [refreshRosters]);
 
-  const addRoster = useCallback(async (data: { name: string; factionId: string; factionName: string; pointsLimit: number }): Promise<Roster> => {
+  const addRoster = useCallback(async (data: { name: string; factionId: string; factionName: string; pointsLimit: number; allowLegends?: boolean }): Promise<Roster> => {
     if (token) {
       const roster = await api.createRoster(token, data);
       setRosters(prev => [roster, ...prev]);
@@ -61,6 +61,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       const roster: Roster = {
         id: crypto.randomUUID(),
         ...data,
+        allowLegends: data.allowLegends ?? false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -86,7 +87,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
-  const editRoster = useCallback(async (id: string, data: { name: string; pointsLimit: number }) => {
+  const editRoster = useCallback(async (id: string, data: { name: string; pointsLimit: number; allowLegends: boolean }) => {
     if (token) {
       const updated = await api.updateRoster(token, id, data);
       setRosters(prev => prev.map(r => r.id === id ? updated : r));

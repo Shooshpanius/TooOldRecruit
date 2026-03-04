@@ -12,5 +12,6 @@ namespace My40kRoaster.Server.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public string UnitsJson { get; set; } = "[]";
+        public bool AllowLegends { get; set; } = false;
     }
 }

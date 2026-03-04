@@ -7,6 +7,7 @@ namespace My40kRoaster.Server.DTOs
         public string FactionId { get; set; } = string.Empty;
         public string FactionName { get; set; } = string.Empty;
         public int PointsLimit { get; set; }
+        public bool AllowLegends { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
@@ -17,11 +18,13 @@ namespace My40kRoaster.Server.DTOs
         public string FactionId { get; set; } = string.Empty;
         public string FactionName { get; set; } = string.Empty;
         public int PointsLimit { get; set; }
+        public bool AllowLegends { get; set; } = false;
     }
 
     public class UpdateRosterRequest
     {
         public string Name { get; set; } = string.Empty;
         public int PointsLimit { get; set; }
+        public bool AllowLegends { get; set; }
     }
 }

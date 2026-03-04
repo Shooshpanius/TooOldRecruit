@@ -11,6 +11,7 @@ export interface Roster {
   factionId: string;
   factionName: string;
   pointsLimit: number;
+  allowLegends: boolean;
   createdAt: string;
   updatedAt: string;
 }

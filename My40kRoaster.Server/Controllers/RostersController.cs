@@ -5,6 +5,7 @@ using My40kRoaster.Server.Data;
 using My40kRoaster.Server.DTOs;
 using My40kRoaster.Server.Models;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace My40kRoaster.Server.Controllers
 {
@@ -15,6 +16,28 @@ namespace My40kRoaster.Server.Controllers
     {
         private static readonly int[] AllowedPointsLimits = [500, 1000, 1500, 2000, 2500];
         private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        private static bool HasLegendsUnits(string unitsJson)
+        {
+            try
+            {
+                var doc = JsonDocument.Parse(unitsJson);
+                foreach (var group in doc.RootElement.EnumerateArray())
+                {
+                    if (group.TryGetProperty("units", out var units))
+                    {
+                        foreach (var unit in units.EnumerateArray())
+                        {
+                            if (unit.TryGetProperty("name", out var name) &&
+                                name.GetString()?.Contains("[Legends]", StringComparison.OrdinalIgnoreCase) == true)
+                                return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<RosterDto>>> GetRosters()
@@ -30,6 +53,7 @@ namespace My40kRoaster.Server.Controllers
                     FactionId = r.FactionId,
                     FactionName = r.FactionName,
                     PointsLimit = r.PointsLimit,
+                    AllowLegends = r.AllowLegends,
                     CreatedAt = r.CreatedAt,
                     UpdatedAt = r.UpdatedAt
                 })
@@ -50,6 +74,7 @@ namespace My40kRoaster.Server.Controllers
                 FactionId = roster.FactionId,
                 FactionName = roster.FactionName,
                 PointsLimit = roster.PointsLimit,
+                AllowLegends = roster.AllowLegends,
                 CreatedAt = roster.CreatedAt,
                 UpdatedAt = roster.UpdatedAt
             });
@@ -67,7 +92,8 @@ namespace My40kRoaster.Server.Controllers
                 Name = request.Name,
                 FactionId = request.FactionId,
                 FactionName = request.FactionName,
-                PointsLimit = request.PointsLimit
+                PointsLimit = request.PointsLimit,
+                AllowLegends = request.AllowLegends
             };
             db.Rosters.Add(roster);
             await db.SaveChangesAsync();
@@ -78,6 +104,7 @@ namespace My40kRoaster.Server.Controllers
                 FactionId = roster.FactionId,
                 FactionName = roster.FactionName,
                 PointsLimit = roster.PointsLimit,
+                AllowLegends = roster.AllowLegends,
                 CreatedAt = roster.CreatedAt,
                 UpdatedAt = roster.UpdatedAt
             };
@@ -92,8 +119,11 @@ namespace My40kRoaster.Server.Controllers
             var userId = GetUserId();
             var roster = await db.Rosters.FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
             if (roster == null) return NotFound();
+            if (!request.AllowLegends && HasLegendsUnits(roster.UnitsJson))
+                return BadRequest("Нельзя отключить опцию [LEG]: в ростере есть отряды с [Legends].");
             roster.Name = request.Name;
             roster.PointsLimit = request.PointsLimit;
+            roster.AllowLegends = request.AllowLegends;
             roster.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Ok(new RosterDto
@@ -103,6 +133,7 @@ namespace My40kRoaster.Server.Controllers
                 FactionId = roster.FactionId,
                 FactionName = roster.FactionName,
                 PointsLimit = roster.PointsLimit,
+                AllowLegends = roster.AllowLegends,
                 CreatedAt = roster.CreatedAt,
                 UpdatedAt = roster.UpdatedAt
             });

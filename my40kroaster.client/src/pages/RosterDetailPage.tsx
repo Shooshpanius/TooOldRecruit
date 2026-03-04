@@ -30,6 +30,7 @@ export function RosterDetailPage() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(roster?.name || '');
   const [pointsLimit, setPointsLimit] = useState(roster?.pointsLimit || 2000);
+  const [allowLegends, setAllowLegends] = useState(roster?.allowLegends ?? false);
   const [saving, setSaving] = useState(false);
   const [unitAddTarget, setUnitAddTarget] = useState<{ groupId: string | null }>({ groupId: null });
   const [addingUnit, setAddingUnit] = useState(false);
@@ -39,6 +40,10 @@ export function RosterDetailPage() {
     sum + group.units.reduce((s, u) => s + (u.cost ?? 0), 0), 0
   );
   const remainingPoints = roster ? roster.pointsLimit - totalCost : 0;
+
+  const hasLegendsUnits = unitGroups.some(group =>
+    group.units.some(u => u.name.toLowerCase().includes('[legends]'))
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -75,7 +80,7 @@ export function RosterDetailPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await editRoster(roster.id, { name, pointsLimit });
+      await editRoster(roster.id, { name, pointsLimit, allowLegends });
       setEditing(false);
     } finally {
       setSaving(false);
@@ -94,7 +99,7 @@ export function RosterDetailPage() {
         <button onClick={() => navigate('/')} className="btn btn-back">← Назад</button>
         <div className="page-header-actions">
           <button
-            onClick={() => { setEditing(!editing); setName(roster.name); setPointsLimit(roster.pointsLimit); }}
+            onClick={() => { setEditing(!editing); setName(roster.name); setPointsLimit(roster.pointsLimit); setAllowLegends(roster.allowLegends ?? false); }}
             className="btn btn-secondary btn-sm"
           >
             {editing ? 'Отмена' : 'Редактировать'}
@@ -123,6 +128,20 @@ export function RosterDetailPage() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="form-group">
+            <label className="form-checkbox-label">
+              <input
+                type="checkbox"
+                checked={allowLegends}
+                disabled={hasLegendsUnits}
+                onChange={e => setAllowLegends(e.target.checked)}
+              />
+              <span>[LEG] Разрешить отряды с [Legends]</span>
+            </label>
+            {hasLegendsUnits && (
+              <div className="form-hint">Нельзя отключить: в ростере есть отряды с [Legends]</div>
+            )}
           </div>
           <button onClick={handleSave} disabled={saving} className="btn btn-primary">
             {saving ? 'Сохранение...' : 'Сохранить'}
@@ -269,6 +288,7 @@ export function RosterDetailPage() {
               onClose={() => setAddingUnit(false)}
               remainingPoints={remainingPoints}
               currentUnitGroups={unitGroups}
+              allowLegends={roster.allowLegends ?? false}
               onAdd={unit => {
                 const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };
                 let updated: UnitGroup[];

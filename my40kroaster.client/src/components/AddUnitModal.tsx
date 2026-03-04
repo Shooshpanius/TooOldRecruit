@@ -11,9 +11,10 @@ interface AddUnitModalProps {
   remainingPoints?: number;
   // Текущие отряды в ростере — нужны для проверки лимита maxInRoster
   currentUnitGroups?: UnitGroup[];
+  allowLegends?: boolean;
 }
 
-export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups }: AddUnitModalProps) {
+export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups, allowLegends }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [openType, setOpenType] = useState<string | null>(null);
@@ -29,7 +30,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
 
   const filteredUnits = attachMode ? units.filter(u => u.isLeader) : units;
 
-  const grouped = filteredUnits.reduce<Record<string, Unit[]>>((acc, unit) => {
+  const visibleUnits = allowLegends
+    ? filteredUnits
+    : filteredUnits.filter(u => !u.name.toLowerCase().includes('[legends]'));
+
+  const grouped = visibleUnits.reduce<Record<string, Unit[]>>((acc, unit) => {
     if (!acc[unit.category]) acc[unit.category] = [];
     acc[unit.category].push(unit);
     return acc;
