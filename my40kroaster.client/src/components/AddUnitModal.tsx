@@ -33,7 +33,8 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       // Инициализируем количество моделей минимальным значением каждого диапазона
       const init: Record<string, number> = {};
       data.forEach(u => {
-        if (u.costBands && u.costBands.length > 1) {
+        if (u.costBands && (u.costBands.length > 1 ||
+            (u.costBands.length === 1 && u.costBands[0].minModels !== u.costBands[0].maxModels))) {
           init[u.id] = u.costBands[0].minModels;
         }
       });
@@ -82,7 +83,10 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
     : [];
 
   const renderUnitItem = (unit: Unit) => {
-    const hasBands = unit.costBands && unit.costBands.length > 1;
+    const hasBands = unit.costBands != null && (
+      unit.costBands.length > 1 ||
+      (unit.costBands.length === 1 && unit.costBands[0].minModels !== unit.costBands[0].maxModels)
+    );
     const selectedCount = hasBands ? (modelCounts[unit.id] ?? unit.costBands![0].minModels) : undefined;
     const activeBand = hasBands ? bandForCount(unit.costBands!, selectedCount!) : undefined;
     const effectiveCost = activeBand?.cost ?? unit.cost;

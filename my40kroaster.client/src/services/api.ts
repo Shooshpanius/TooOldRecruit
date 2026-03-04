@@ -219,13 +219,14 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
       // Парсим ценовые диапазоны (costTiers / costBands)
       const rawTiers = item.costTiers ?? item.costBands;
       let costBands: import('../types').UnitCostBand[] | undefined;
-      if (Array.isArray(rawTiers) && rawTiers.length > 1) {
+      if (Array.isArray(rawTiers) && rawTiers.length >= 1) {
         const parsed = rawTiers.map(t => ({
           minModels: toNum(t.minModels) ?? 0,
           maxModels: toNum(t.maxModels) ?? 0,
           cost: toNum(t.pts ?? (t as { cost?: number | string }).cost) ?? 0,
         })).filter(t => t.cost > 0);
-        if (parsed.length > 1) {
+        // Multiple bands, OR a single band whose model range spans more than one count
+        if (parsed.length > 1 || (parsed.length === 1 && parsed[0].minModels !== parsed[0].maxModels)) {
           costBands = parsed;
           // Используем стоимость минимального диапазона как базовую
           if (cost === undefined) cost = parsed[0].cost;

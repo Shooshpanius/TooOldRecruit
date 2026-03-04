@@ -100,10 +100,68 @@ namespace My40kRoaster.Server.Services
                 units.Add(unit);
             }
 
+            // For units with no inline cost tiers, fetch from the dedicated endpoint.
+            await FetchAndApplyCostTiersAsync(client, units, ct).ConfigureAwait(false);
+
             db.BsDataUnits.AddRange(units);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             return units;
         }
+
+        /// <summary>
+        /// Fetches cost tiers for units that have none from inline parsing, using the
+        /// dedicated <c>/units/{id}/cost-tiers</c> API endpoint.
+        /// Requests are issued in parallel (max <see cref="MaxConcurrentCostTierRequests"/>
+        /// concurrent) and per-unit failures are logged but do not abort the import.
+        /// </summary>
+        private async Task FetchAndApplyCostTiersAsync(
+            HttpClient client, List<BsDataUnit> units, CancellationToken ct)
+        {
+            var unitsWithoutTiers = units.Where(u => u.CostTiers.Count == 0).ToList();
+            if (unitsWithoutTiers.Count == 0) return;
+
+            using var semaphore = new System.Threading.SemaphoreSlim(
+                MaxConcurrentCostTierRequests, MaxConcurrentCostTierRequests);
+
+            var tasks = unitsWithoutTiers.Select(async unit =>
+            {
+                await semaphore.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    using var r = await client
+                        .GetAsync($"units/{Uri.EscapeDataString(unit.Id)}/cost-tiers", ct)
+                        .ConfigureAwait(false);
+
+                    if (!r.IsSuccessStatusCode) return;
+
+                    var json = await r.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    var tiers = JsonSerializer.Deserialize<List<ApiCostTierItem>>(json, JsonOptions);
+                    if (tiers is null || tiers.Count == 0) return;
+
+                    unit.CostTiers = tiers
+                        .Where(t => t.Points > 0)
+                        .Select(t => new BsDataCostTier
+                        {
+                            UnitId = unit.Id,
+                            MinModels = t.MinModels,
+                            MaxModels = t.MaxModels,
+                            Points = t.Points
+                        })
+                        .ToList();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Non-critical: log and continue so one bad unit doesn't break the import
+                    Console.Error.WriteLine(
+                        $"[BsDataImport] Failed to fetch cost tiers for unit '{unit.Id}': {ex.Message}");
+                }
+                finally { semaphore.Release(); }
+            });
+
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        private const int MaxConcurrentCostTierRequests = 10;
 
         // ── helpers ──────────────────────────────────────────────────────────
 
@@ -270,6 +328,14 @@ namespace My40kRoaster.Server.Services
             public string? Name { get; set; }
             public string? Type { get; set; }
             public string? TargetId { get; set; }
+        }
+
+        /// <summary>Maps the response body of <c>/units/{id}/cost-tiers</c>.</summary>
+        private sealed class ApiCostTierItem
+        {
+            public int MinModels { get; set; }
+            public int MaxModels { get; set; }
+            public int Points { get; set; }
         }
     }
 }

@@ -3,10 +3,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRosters } from '../contexts/RosterContext';
 import { useAuth } from '../contexts/AuthContext';
 import { AddUnitModal } from '../components/AddUnitModal';
-import type { RosterUnit, UnitGroup, UnitCostBand } from '../types';
+import type { RosterUnit, UnitGroup, UnitCostBand, Unit } from '../types';
 import * as api from '../services/api';
 
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
+
+/** Возвращает true, если у отряда есть переменное число моделей (несколько диапазонов или один диапазон с разным min/max). */
+function unitHasBands(unit: Unit): boolean {
+  if (!unit.costBands) return false;
+  if (unit.costBands.length > 1) return true;
+  if (unit.costBands.length === 1 && unit.costBands[0].minModels !== unit.costBands[0].maxModels) return true;
+  return false;
+}
 
 /** Выбирает ценовой диапазон для указанного количества моделей. */
 function bandForCount(bands: UnitCostBand[], count: number) {
@@ -52,15 +60,64 @@ export function RosterDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    if (token) {
-      api.getRosterUnits(token, id).then(setUnitGroups).catch(err => {
-        console.error('Failed to load roster units:', err);
-        setUnitGroups([]);
-      });
-    } else {
-      setUnitGroups(loadLocalUnits(id));
-    }
-  }, [id, token]);
+    let cancelled = false;
+
+    const load = async () => {
+      // 1. Load stored roster units
+      let groups: UnitGroup[];
+      if (token) {
+        try { groups = await api.getRosterUnits(token, id); }
+        catch (err) { console.error('Failed to load roster units:', err); groups = []; }
+      } else {
+        groups = loadLocalUnits(id);
+      }
+
+      if (cancelled) return;
+
+      // 2. Enrich any primary unit that lacks costBands with fresh catalogue data.
+      //    This fixes units that were added before cost-tier data was available.
+      const factionId = roster?.factionId;
+      if (groups.length > 0 && factionId) {
+        try {
+          const factionUnits = await api.getUnits(factionId);
+          if (cancelled) return;
+
+          const unitMap = new Map(factionUnits.map((u: Unit) => [u.id, u]));
+          let changed = false;
+          groups = groups.map(group => {
+            if (group.units.length === 0) return group;
+            const primary = group.units[0];
+            if (unitHasBands(primary)) return group;           // already enriched
+            const fu = unitMap.get(primary.id);
+            if (!fu || !unitHasBands(fu)) return group;        // catalogue has no bands either
+            changed = true;
+            const firstBand = fu.costBands![0];
+            return {
+              ...group,
+              units: [
+                {
+                  ...primary,
+                  costBands: fu.costBands,
+                  modelCount: primary.modelCount ?? firstBand.minModels,
+                },
+                ...group.units.slice(1),
+              ],
+            };
+          });
+
+          if (changed) {
+            if (token) api.updateRosterUnits(token, id, groups).catch(console.error);
+            else saveLocalUnits(id, groups);
+          }
+        } catch (err) { console.error('Failed to enrich roster units with cost bands:', err); }
+      }
+
+      if (!cancelled) setUnitGroups(groups);
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [id, token, roster?.factionId]);
 
   const persistUnits = useCallback((groups: UnitGroup[]) => {
     if (!id) return;
@@ -209,12 +266,12 @@ export function RosterDetailPage() {
                         <span className="unit-group-primary-name">{primaryUnit.name}</span>
                         <div className="unit-group-meta">
                           <span className="roster-unit-type">{primaryUnit.category}</span>
-                          {primaryUnit.costBands && primaryUnit.costBands.length > 1 && primaryUnit.modelCount !== undefined ? (
+                          {unitHasBands(primaryUnit) && primaryUnit.modelCount !== undefined ? (
                             <div className="unit-model-count-stepper">
                               <button
                                 className="btn btn-secondary btn-sm"
                                 aria-label="Уменьшить количество моделей"
-                                disabled={primaryUnit.modelCount <= Math.min(...primaryUnit.costBands.map(b => b.minModels))}
+                                disabled={primaryUnit.modelCount <= Math.min(...primaryUnit.costBands!.map(b => b.minModels))}
                                 onClick={() => {
                                   const newCount = primaryUnit.modelCount! - 1;
                                   const band = bandForCount(primaryUnit.costBands!, newCount);
@@ -225,7 +282,7 @@ export function RosterDetailPage() {
                               <button
                                 className="btn btn-secondary btn-sm"
                                 aria-label="Увеличить количество моделей"
-                                disabled={primaryUnit.modelCount >= Math.max(...primaryUnit.costBands.map(b => b.maxModels))}
+                                disabled={primaryUnit.modelCount >= Math.max(...primaryUnit.costBands!.map(b => b.maxModels))}
                                 onClick={() => {
                                   const newCount = primaryUnit.modelCount! + 1;
                                   const band = bandForCount(primaryUnit.costBands!, newCount);
