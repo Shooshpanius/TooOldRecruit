@@ -37,7 +37,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
     const cat = u.category?.toLowerCase();
     if (cat === 'other') return false;
     if (cat === 'upgrade') return false;
-    if (cat === 'model' && u.cost == null) return false;
+    if (cat === 'model' && (u.cost == null || u.cost === 0)) return false;
     return true;
   });
 
