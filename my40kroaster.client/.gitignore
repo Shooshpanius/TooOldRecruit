@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 obj/
+*.g.props
 
 # Editor directories and files
 .vscode/*
@@ -23,4 +24,3 @@ obj/
 *.njsproj
 *.sln
 *.sw?
-obj\Debug\\package.g.props

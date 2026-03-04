@@ -80,11 +80,13 @@ export async function updateRosterUnits(token: string, rosterId: string, units: 
 // External API
 export async function getFactions(): Promise<Faction[]> {
   try {
-    const res = await fetch(`${WH40K_API}/catalogues`);
+    const res = await fetch(`${WH40K_API}/fractions`);
     if (!res.ok) throw new Error('Failed to fetch factions');
     const data = await res.json();
-    // The API returns catalogues which represent factions
-    const items: ApiCatalogueItem[] = Array.isArray(data.catalogues)
+    // The API returns fractions which represent factions
+    const items: ApiCatalogueItem[] = Array.isArray(data.fractions)
+      ? data.fractions
+      : Array.isArray(data.catalogues)
       ? data.catalogues
       : Array.isArray(data)
       ? (data as ApiCatalogueItem[])
@@ -178,7 +180,7 @@ const DEFAULT_UNITS: Unit[] = [
 
 export async function getUnits(factionId: string): Promise<Unit[]> {
   try {
-    const res = await fetch(`${WH40K_API}/catalogues/${encodeURIComponent(factionId)}/units`);
+    const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/units`);
     if (!res.ok) throw new Error('Failed to fetch units');
     const data = await res.json();
     const items: ApiUnitItem[] = Array.isArray(data.units)
