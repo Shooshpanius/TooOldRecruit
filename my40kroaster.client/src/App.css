@@ -737,14 +737,21 @@ body {
 }
 
 /* Toggle Switch */
-.toggle-row {
+label.toggle-row {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
   cursor: pointer;
+  /* reset .form-group label overrides */
+  font-weight: normal;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-bottom: 0;
 }
 
-.toggle-row--disabled {
+label.toggle-row.toggle-row--disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -753,6 +760,7 @@ body {
   font-size: 0.95rem;
   color: var(--text);
   user-select: none;
+  vertical-align: middle;
 }
 
 .toggle-switch {
@@ -761,6 +769,7 @@ body {
   width: 44px;
   height: 24px;
   flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .toggle-switch input {
