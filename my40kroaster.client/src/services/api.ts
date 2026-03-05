@@ -143,9 +143,11 @@ interface ApiUnitItem {
   infoLinks?: ApiInfoLink[];
   // Максимальное количество отрядов данного типа в ростере
   maxInRoster?: number | string;
-  // Диапазоны стоимости (из unitsWithCosts)
+  // Диапазоны стоимости (из unitsWithCosts / unitsTree)
   costTiers?: ApiCostTier[];
   tiers?: ApiCostTier[];
+  // Дочерние узлы (из unitsTree)
+  children?: ApiUnitItem[];
 }
 
 const DEFAULT_FACTIONS: Faction[] = [
@@ -191,14 +193,51 @@ const DEFAULT_UNITS: Unit[] = [
 
 export async function getUnits(factionId: string): Promise<Unit[]> {
   try {
-    const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsWithCosts`);
+    const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`);
     if (!res.ok) throw new Error('Failed to fetch units');
     const data = await res.json();
-    const items: ApiUnitItem[] = Array.isArray(data.units)
-      ? data.units
-      : Array.isArray(data)
-      ? (data as ApiUnitItem[])
-      : [];
+
+    // Рекурсивно извлекаем все юниты из дерева (unitsTree возвращает иерархическую структуру)
+    function flattenTree(nodes: ApiUnitItem[]): ApiUnitItem[] {
+      const result: ApiUnitItem[] = [];
+      for (const node of nodes) {
+        const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+        // Включаем узел как юнит, если у него есть id/имя и данные о стоимости, правилах или тип "unit"
+        const hasUnitData =
+          node.cost !== undefined ||
+          node.points !== undefined ||
+          node.pts !== undefined ||
+          node.pointCost !== undefined ||
+          node.costs !== undefined ||
+          Array.isArray(node.costTiers) ||
+          Array.isArray(node.tiers) ||
+          Array.isArray(node.infoLinks) ||
+          node.entryType === 'unit' ||
+          node.type === 'unit';
+        if ((node.id !== undefined || node.name !== undefined) && hasUnitData) {
+          result.push(node);
+        }
+        if (hasChildren) {
+          result.push(...flattenTree(node.children ?? []));
+        }
+      }
+      return result;
+    }
+
+    let rootNodes: ApiUnitItem[];
+    if (Array.isArray(data.units)) {
+      rootNodes = data.units;
+    } else if (Array.isArray(data.children)) {
+      rootNodes = data.children;
+    } else if (Array.isArray(data.nodes)) {
+      rootNodes = data.nodes;
+    } else if (Array.isArray(data)) {
+      rootNodes = data as ApiUnitItem[];
+    } else {
+      rootNodes = [];
+    }
+
+    const items: ApiUnitItem[] = flattenTree(rootNodes);
     if (items.length === 0) return DEFAULT_UNITS;
     const toNum = (v: unknown): number | undefined => {
       if (v === null || v === undefined || v === '') return undefined;
@@ -228,7 +267,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
       const isLeader = item.infoLinks?.some(l => l.type === 'rule' && l.name === 'Leader') ?? false;
       const maxInRoster = item.maxInRoster !== undefined ? toNum(item.maxInRoster) : undefined;
 
-      // Парсим встроенные диапазоны стоимости (из unitsWithCosts)
+      // Парсим встроенные диапазоны стоимости (из unitsTree)
       const rawTiers = item.costTiers ?? item.tiers;
       const hasVariableCost = Array.isArray(rawTiers) && rawTiers.length > 0;
       const costBands: UnitCostBand[] | undefined = hasVariableCost
