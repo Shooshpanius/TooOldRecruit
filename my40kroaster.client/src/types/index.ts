@@ -28,6 +28,16 @@ export interface UnitCostBand {
   cost: number;
 }
 
+// Вложенная модель внутри контейнера типа unit
+export interface ModelEntry {
+  id: string;
+  name: string;
+  cost?: number;
+  costBands?: UnitCostBand[];
+  modelCount?: number;
+  hasVariableCost?: boolean;
+}
+
 export interface Unit {
   id: string;
   name: string;
@@ -42,6 +52,10 @@ export interface Unit {
   modelCount?: number;
   // Стоимость зависит от количества моделей в отряде
   hasVariableCost?: boolean;
+  // Тип записи (unit / model)
+  entryType?: string;
+  // Вложенные модели для контейнеров типа unit
+  models?: ModelEntry[];
 }
 
 export interface RosterUnit extends Unit {

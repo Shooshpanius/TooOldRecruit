@@ -1,4 +1,4 @@
-import type { Faction, Unit, UnitCostBand } from '../types';
+import type { Faction, Unit, UnitCostBand, ModelEntry } from '../types';
 
 const API_BASE = '/api';
 const WH40K_API = '/api/bsdata';
@@ -273,6 +273,51 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         cost = costBands![0].cost;
       }
 
+      // Для контейнеров типа unit собираем дочерние модели
+      const modelChildren: ModelEntry[] | undefined =
+        item.entryType === 'unit' && Array.isArray(item.children) && item.children.length > 0
+          ? item.children
+              .filter(c => c.entryType === 'model')
+              .map(child => {
+                let childCost: number | undefined;
+                if (child.cost !== undefined) childCost = toNum(child.cost);
+                else if (child.points !== undefined) childCost = toNum(child.points);
+                else if (child.pts !== undefined) childCost = toNum(child.pts);
+                else if (child.pointCost !== undefined) childCost = toNum(child.pointCost);
+                else if (Array.isArray(child.costs)) {
+                  const pts = child.costs.find(c => { const n = c.name?.toLowerCase(); return n?.includes('pts') || n?.includes('point'); });
+                  const raw = pts?.value ?? child.costs[0]?.value;
+                  childCost = toNum(raw);
+                } else if (child.costs !== undefined) childCost = toNum(child.costs);
+
+                const childRawTiers = child.costTiers ?? child.tiers;
+                const childHasVariableCost = Array.isArray(childRawTiers) && childRawTiers.length > 0;
+                const childCostBands: UnitCostBand[] | undefined = childHasVariableCost
+                  ? (childRawTiers as ApiCostTier[]).map(t => ({
+                      minModels: toNumStrict(t.minModels),
+                      maxModels: toNumStrict(t.maxModels),
+                      cost: toNumStrict(t.points),
+                    }))
+                  : undefined;
+                if (childHasVariableCost && childCostBands) {
+                  childCost = childCostBands[0].cost;
+                }
+                return {
+                  id: child.id ?? child.name ?? '',
+                  name: child.name ?? '',
+                  cost: childCost,
+                  costBands: childHasVariableCost ? childCostBands : undefined,
+                  modelCount: childHasVariableCost && childCostBands ? childCostBands[0].minModels : undefined,
+                  hasVariableCost: childHasVariableCost,
+                } satisfies ModelEntry;
+              })
+          : undefined;
+
+      // Если у unit-контейнера есть дочерние модели — стоимость равна сумме стоимостей моделей
+      if (modelChildren && modelChildren.length > 0) {
+        cost = modelChildren.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+      }
+
       return {
         id: item.id ?? item.name ?? '',
         name: item.name ?? '',
@@ -283,6 +328,8 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         costBands: hasVariableCost ? costBands : undefined,
         modelCount: hasVariableCost && costBands ? costBands[0].minModels : undefined,
         hasVariableCost,
+        entryType: item.entryType,
+        models: modelChildren && modelChildren.length > 0 ? modelChildren : undefined,
       };
     });
   } catch (err) {

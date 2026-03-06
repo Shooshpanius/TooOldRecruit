@@ -793,6 +793,39 @@ body {
   color: var(--text-muted);
 }
 
+/* Список вложенных моделей для контейнера типа unit */
+.unit-models-list {
+  list-style: none;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.unit-model-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.5rem 2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.unit-model-item:last-child {
+  border-bottom: none;
+}
+
+.unit-model-item-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.unit-model-item-name {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 /* Roster Units List */
 .roster-units-list {
   list-style: none;

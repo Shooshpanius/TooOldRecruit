@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRosters } from '../contexts/RosterContext';
 import { useAuth } from '../contexts/AuthContext';
 import { AddUnitModal } from '../components/AddUnitModal';
-import type { RosterUnit, UnitGroup, UnitCostBand } from '../types';
+import type { RosterUnit, UnitGroup, UnitCostBand, ModelEntry } from '../types';
 import * as api from '../services/api';
 
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
@@ -208,7 +208,82 @@ export function RosterDetailPage() {
                             <span className="unit-cost">{primaryUnit.cost} pts</span>
                           )}
                         </div>
-                        {primaryUnit.costBands && primaryUnit.costBands.length > 1 && (() => {
+                        {/* Для контейнеров типа unit — вложенные модели без счётчика на самом unit */}
+                        {primaryUnit.entryType === 'unit' && primaryUnit.models && primaryUnit.models.length > 0
+                          ? (
+                            <ul className="unit-models-list">
+                              {primaryUnit.models.map((model: ModelEntry, modelIndex: number) => {
+                                const hasBands = !!(model.costBands && model.costBands.length >= 1 &&
+                                  (model.costBands.length > 1 || model.costBands[0].minModels < model.costBands[0].maxModels));
+                                const bands = model.costBands ?? [];
+                                const minM = bands.length > 0 ? bands[0].minModels : 1;
+                                const maxM = bands.length > 0 ? bands[bands.length - 1].maxModels : 1;
+                                const currentCount = model.modelCount ?? minM;
+                                const setModelCount = (val: number) => {
+                                  const clamped = Math.min(maxM, Math.max(minM, val));
+                                  const newModelCost = getCostForModelCount(bands, clamped);
+                                  const updated = unitGroups.map(g => g.id === group.id
+                                    ? {
+                                        ...g,
+                                        units: g.units.map((u, idx) => {
+                                          if (idx !== 0) return u;
+                                          const newModels = (u.models ?? []).map((m, i) =>
+                                            i === modelIndex ? { ...m, modelCount: clamped, cost: newModelCost } : m
+                                          );
+                                          const newCost = newModels.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+                                          return { ...u, models: newModels, cost: newCost };
+                                        })
+                                      }
+                                    : g
+                                  );
+                                  setUnitGroups(updated);
+                                  persistUnits(updated);
+                                };
+                                return (
+                                  <li key={model.id} className="unit-model-item">
+                                    <div className="unit-model-item-info">
+                                      <span className="unit-model-item-name">{model.name}</span>
+                                      {model.cost !== undefined && (
+                                        <span className="unit-cost">{model.cost} pts</span>
+                                      )}
+                                    </div>
+                                    {hasBands && (
+                                      <div className="unit-model-count">
+                                        <span className="unit-model-count-label">Моделей:</span>
+                                        <button
+                                          type="button"
+                                          className="unit-model-count-btn"
+                                          onClick={() => setModelCount(currentCount - 1)}
+                                          disabled={currentCount <= minM}
+                                          aria-label="Уменьшить количество моделей"
+                                        >−</button>
+                                        <input
+                                          type="number"
+                                          className="unit-model-count-input"
+                                          value={currentCount}
+                                          min={minM}
+                                          max={maxM}
+                                          onChange={e => {
+                                            const val = parseInt(e.target.value, 10);
+                                            if (!isNaN(val)) setModelCount(val);
+                                          }}
+                                          aria-label="Количество моделей"
+                                        />
+                                        <button
+                                          type="button"
+                                          className="unit-model-count-btn"
+                                          onClick={() => setModelCount(currentCount + 1)}
+                                          disabled={currentCount >= maxM}
+                                          aria-label="Увеличить количество моделей"
+                                        >+</button>
+                                      </div>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )
+                          : primaryUnit.costBands && primaryUnit.costBands.length > 1 && (() => {
                           const bands = primaryUnit.costBands;
                           const minM = bands[0].minModels;
                           const maxM = bands[bands.length - 1].maxModels;
