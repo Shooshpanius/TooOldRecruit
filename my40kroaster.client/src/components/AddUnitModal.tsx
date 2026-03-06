@@ -66,9 +66,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
     : [];
 
   const renderUnitItem = (unit: Unit) => {
-    // Показываем элементы управления количеством моделей, если есть несколько диапазонов
-    // стоимости ИЛИ единственный диапазон допускает разное количество моделей (min < max).
-    const hasBands = !!(unit.costBands && unit.costBands.length >= 1 &&
+    // Показываем элементы управления количеством моделей только для записей entryType="model",
+    // если есть несколько диапазонов стоимости ИЛИ единственный диапазон допускает разное количество (min < max).
+    const hasBands = unit.entryType === 'model' && !!(unit.costBands && unit.costBands.length >= 1 &&
       (unit.costBands.length > 1 || (unit.costBands[0]?.minModels ?? 0) < (unit.costBands[0]?.maxModels ?? 0)));
     const minModels = hasBands ? unit.costBands![0].minModels : 1;
     const maxModels = hasBands ? unit.costBands![unit.costBands!.length - 1].maxModels : 1;

@@ -200,7 +200,8 @@ export function RosterDetailPage() {
                       <div className="unit-group-info">
                         <span className="unit-group-primary-name">
                           {primaryUnit.name}
-                          {primaryUnit.hasVariableCost && <span className="unit-variable-badge">[M]</span>}
+                          {primaryUnit.entryType === 'unit' && <span className="unit-type-badge">[U]</span>}
+                          {primaryUnit.entryType === 'model' && <span className="unit-type-badge">[M]</span>}
                         </span>
                         <div className="unit-group-meta">
                           <span className="roster-unit-type">{primaryUnit.category}</span>
@@ -208,7 +209,7 @@ export function RosterDetailPage() {
                             <span className="unit-cost">{primaryUnit.cost} pts</span>
                           )}
                         </div>
-                        {primaryUnit.costBands && primaryUnit.costBands.length > 1 && (() => {
+                        {primaryUnit.entryType === 'model' && primaryUnit.costBands && primaryUnit.costBands.length > 1 && (() => {
                           const bands = primaryUnit.costBands;
                           const minM = bands[0].minModels;
                           const maxM = bands[bands.length - 1].maxModels;
