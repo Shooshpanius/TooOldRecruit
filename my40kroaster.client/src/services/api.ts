@@ -323,7 +323,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
       };
     };
 
-    return items.map(mapItem);
+    return items.map(item => mapItem(item));
   } catch (err) {
     console.error('Failed to fetch units from API, using defaults:', err);
     return DEFAULT_UNITS;
