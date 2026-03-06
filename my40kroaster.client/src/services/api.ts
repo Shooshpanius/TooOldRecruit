@@ -278,9 +278,23 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         ? (item.entryType as 'unit' | 'model')
         : undefined;
 
-      // Вложенные модели для контейнеров типа "unit" (только один уровень вложенности)
+      // Вложенные модели для контейнеров типа "unit".
+      // Ищем итеративно через всё поддерево, т.к. модели могут быть вложены через промежуточные контейнеры.
+      function collectModels(children: ApiUnitItem[]): ApiUnitItem[] {
+        const result: ApiUnitItem[] = [];
+        const queue: ApiUnitItem[] = [...children];
+        while (queue.length > 0) {
+          const child = queue.shift()!;
+          if (child.entryType === 'model') {
+            result.push(child);
+          } else if (Array.isArray(child.children)) {
+            queue.push(...child.children);
+          }
+        }
+        return result;
+      }
       const models: Unit[] | undefined = depth === 0 && entryType === 'unit' && Array.isArray(item.children)
-        ? item.children.filter(child => child.entryType === 'model').map(child => mapItem(child, depth + 1))
+        ? collectModels(item.children).map(child => mapItem(child, depth + 1))
         : undefined;
 
       return {
