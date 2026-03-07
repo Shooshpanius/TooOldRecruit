@@ -72,14 +72,16 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
   const renderUnitItem = (unit: Unit, depth = 0): React.ReactNode => {
     const isNested = depth > 0;
 
-    // Промежуточный контейнер (entryType не задан, есть дочерние узлы) — рендерим как заголовок группы
+    // Промежуточный контейнер (entryType не задан, есть дочерние узлы) — рендерим как аккордеон
     if (unit.entryType === undefined && unit.models && unit.models.length > 0) {
       return (
         <li key={unit.id} className="unit-container-group">
-          <span className="unit-container-label">— {unit.name}</span>
-          <ul className="unit-nested-models">
-            {unit.models.map(child => renderUnitItem(child, depth + 1))}
-          </ul>
+          <details className="unit-container-details">
+            <summary className="unit-container-label">— {unit.name}</summary>
+            <ul className="unit-nested-models">
+              {unit.models.map(child => renderUnitItem(child, depth + 1))}
+            </ul>
+          </details>
         </li>
       );
     }
