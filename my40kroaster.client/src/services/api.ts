@@ -145,6 +145,8 @@ interface ApiUnitItem {
   infoLinks?: ApiInfoLink[];
   // Максимальное количество отрядов данного типа в ростере
   maxInRoster?: number | string;
+  // Минимальное количество миниатюр (для контейнерных узлов)
+  minInRoster?: number | string;
   // Диапазоны стоимости (из unitsTree)
   costTiers?: ApiCostTier[];
   tiers?: ApiCostTier[];
@@ -329,6 +331,9 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
                 cost: undefined,
                 entryType: undefined,
                 models: nested,
+                // Сохраняем ограничения контейнера: используются для отрядов с несколькими типами моделей
+                minCount: child.minInRoster !== undefined ? toNum(child.minInRoster) : undefined,
+                maxCount: child.maxInRoster !== undefined ? toNum(child.maxInRoster) : undefined,
               });
             }
           }

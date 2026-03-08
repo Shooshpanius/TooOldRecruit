@@ -48,6 +48,12 @@ export interface Unit {
   models?: Unit[];
   // Юнит из раздела «Allied Units» (союзные войска из связанного каталога)
   isAllied?: boolean;
+  // Минимальное суммарное количество миниатюр (из контейнерного узла каталога)
+  minCount?: number;
+  // Максимальное суммарное количество миниатюр (из контейнерного узла каталога)
+  maxCount?: number;
+  // Количество миниатюр по каждому типу модели (для отрядов с несколькими типами моделей)
+  modelCounts?: Record<string, number>;
 }
 
 export interface RosterUnit extends Unit {

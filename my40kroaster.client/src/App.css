@@ -712,6 +712,13 @@ body {
   -moz-appearance: textfield;
 }
 
+.unit-model-count-hint {
+  font-size: 0.8rem;
+  color: var(--danger, #e74c3c);
+  padding: 0.2rem 0.5rem;
+  list-style: none;
+}
+
 /* Unit Groups */
 .unit-groups {
   display: flex;

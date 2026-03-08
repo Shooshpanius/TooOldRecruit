@@ -33,6 +33,23 @@ function findChildModelWithBands(models?: Unit[]): Unit | undefined {
   return undefined;
 }
 
+// Ищет контейнерный узел с несколькими типами моделей и ограничением по суммарному количеству
+function findMultiModelContainer(models?: Unit[]): Unit | undefined {
+  if (!models) return undefined;
+  for (const m of models) {
+    if (m.entryType === undefined && m.models && m.models.length > 0 &&
+      (m.minCount !== undefined || m.maxCount !== undefined)) {
+      return m;
+    }
+  }
+  return undefined;
+}
+
+// Вычисляет эффективный максимум для одного типа модели с учётом суммарного ограничения
+function calcEffectiveMax(modelMaxInRoster: number | undefined, maxTotal: number, otherTotal: number): number {
+  return Math.min(modelMaxInRoster ?? maxTotal, maxTotal - otherTotal);
+}
+
 export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups, allowLegends }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +113,109 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
               {unit.models.map(child => renderUnitItem(child, depth + 1))}
             </ul>
           </details>
+        </li>
+      );
+    }
+
+    // Случай: отряд [U] с несколькими типами моделей (например, Ironstrider Ballistarii)
+    // — контейнерный узел задаёт суммарный min/max, каждый [M] имеет фиксированную стоимость
+    const multiContainer = !isNested && unit.entryType === 'unit'
+      ? findMultiModelContainer(unit.models)
+      : undefined;
+    if (multiContainer) {
+      const containerModels = multiContainer.models ?? [];
+      const minTotal = multiContainer.minCount ?? 1;
+      const maxTotal = multiContainer.maxCount ?? 99;
+      const totalCount = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? 0), 0);
+      const computedCost = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? 0) * (m.cost ?? 0), 0);
+      const isValidTotal = totalCount >= minTotal && totalCount <= maxTotal;
+      const canAdd = isValidTotal && (remainingPoints === undefined || computedCost <= remainingPoints);
+      const inRoster = countInRoster(unit.id);
+      const limitReached = unit.maxInRoster !== undefined && inRoster >= unit.maxInRoster;
+      return (
+        <li key={unit.id} className="unit-item">
+          <div className="unit-item-top">
+            <div className="unit-info">
+              <span className="unit-name">
+                {unit.name}
+                <span className="unit-type-badge">[U]</span>
+              </span>
+              <span className="unit-cost">{computedCost} pts</span>
+            </div>
+            <div className="unit-item-footer">
+              {unit.maxInRoster !== undefined && (
+                <span className={`unit-roster-count${limitReached ? ' unit-roster-count--limit' : ''}`}>
+                  {inRoster}/{unit.maxInRoster}
+                </span>
+              )}
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => onAdd({
+                  ...unit,
+                  cost: computedCost,
+                  modelCounts: Object.fromEntries(containerModels.map(m => [m.id, modelCounts[m.id] ?? 0])),
+                })}
+                disabled={!canAdd || limitReached}
+                aria-label={attachMode ? 'Присоединить' : 'Добавить'}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <ul className="unit-nested-models">
+            {containerModels.map(model => {
+              const count = modelCounts[model.id] ?? 0;
+              const otherTotal = totalCount - count;
+              const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
+              return (
+                <li key={model.id} className="unit-nested-model-item">
+                  <span className="unit-nested-model-name">
+                    {model.name}
+                    <span className="unit-type-badge">[M]</span>
+                  </span>
+                  {model.cost !== undefined && (
+                    <span className="unit-cost">{model.cost} pts</span>
+                  )}
+                  <div className="unit-model-count">
+                    <span className="unit-model-count-label">Миниатюр:</span>
+                    <button
+                      type="button"
+                      className="unit-model-count-btn"
+                      onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: count - 1 }))}
+                      disabled={count <= 0}
+                      aria-label="Уменьшить количество миниатюр"
+                    >−</button>
+                    <input
+                      type="number"
+                      className="unit-model-count-input"
+                      value={count}
+                      min={0}
+                      max={effectiveMax}
+                      onChange={e => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v)) {
+                          setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(0, v)) }));
+                        }
+                      }}
+                      aria-label="Количество миниатюр"
+                    />
+                    <button
+                      type="button"
+                      className="unit-model-count-btn"
+                      onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: count + 1 }))}
+                      disabled={count >= effectiveMax}
+                      aria-label="Увеличить количество миниатюр"
+                    >+</button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {!isValidTotal && (
+            <div className="unit-model-count-hint">
+              Выберите от {minTotal} до {maxTotal} миниатюр (выбрано: {totalCount})
+            </div>
+          )}
         </li>
       );
     }

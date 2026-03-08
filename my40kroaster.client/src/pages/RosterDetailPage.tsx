@@ -15,6 +15,23 @@ function getCostForModelCount(bands: UnitCostBand[], count: number): number {
   return band?.cost ?? bands[0].cost;
 }
 
+// Ищет контейнерный узел с несколькими типами моделей и ограничением по суммарному количеству
+function findMultiModelContainer(models?: Unit[]): Unit | undefined {
+  if (!models) return undefined;
+  for (const m of models) {
+    if (m.entryType === undefined && m.models && m.models.length > 0 &&
+      (m.minCount !== undefined || m.maxCount !== undefined)) {
+      return m;
+    }
+  }
+  return undefined;
+}
+
+// Вычисляет эффективный максимум для одного типа модели с учётом суммарного ограничения
+function calcEffectiveMax(modelMaxInRoster: number | undefined, maxTotal: number, otherTotal: number): number {
+  return Math.min(modelMaxInRoster ?? maxTotal, maxTotal - otherTotal);
+}
+
 function renderRosterModels(
   models: Unit[],
   parentCostBands?: UnitCostBand[],
@@ -478,6 +495,94 @@ export function RosterDetailPage() {
                       </ul>
                     )}
                     {primaryUnit.entryType === 'unit' && primaryUnit.models && primaryUnit.models.length > 0 && (() => {
+                      // Случай 1: отряд с несколькими типами моделей (Ironstrider-подобная структура)
+                      const multiContainer = findMultiModelContainer(primaryUnit.models);
+                      if (multiContainer) {
+                        const containerModels = multiContainer.models ?? [];
+                        const minTotal = multiContainer.minCount ?? 1;
+                        const maxTotal = multiContainer.maxCount ?? 99;
+                        const currentCounts = primaryUnit.modelCounts ?? {};
+                        const totalCount = containerModels.reduce((sum, m) => sum + (currentCounts[m.id] ?? 0), 0);
+
+                        const handleModelCountChange = (modelId: string, val: number) => {
+                          const model = containerModels.find(m => m.id === modelId);
+                          if (!model) return;
+                          const otherTotal = totalCount - (currentCounts[modelId] ?? 0);
+                          const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
+                          const clamped = Math.min(effectiveMax, Math.max(0, val));
+                          const newCounts = { ...currentCounts, [modelId]: clamped };
+                          const newCost = containerModels.reduce((sum, m) => sum + (newCounts[m.id] ?? 0) * (m.cost ?? 0), 0);
+                          const updated = unitGroups.map(g => g.id === group.id
+                            ? {
+                                ...g,
+                                units: g.units.map((u, idx) => idx === 0
+                                  ? { ...u, modelCounts: newCounts, cost: newCost }
+                                  : u
+                                )
+                              }
+                            : g
+                          );
+                          setUnitGroups(updated);
+                          persistUnits(updated);
+                        };
+
+                        return (
+                          <ul className="unit-nested-models unit-nested-models--roster">
+                            {containerModels.map(model => {
+                              const count = currentCounts[model.id] ?? 0;
+                              const otherTotal = totalCount - count;
+                              const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
+                              return (
+                                <li key={model.id} className="unit-nested-model-item">
+                                  <span className="unit-nested-model-name">
+                                    {model.name}
+                                    <span className="unit-type-badge">[M]</span>
+                                  </span>
+                                  {model.cost !== undefined && (
+                                    <span className="unit-cost">{model.cost} pts</span>
+                                  )}
+                                  <div className="unit-model-count">
+                                    <span className="unit-model-count-label">Миниатюр:</span>
+                                    <button
+                                      type="button"
+                                      className="unit-model-count-btn"
+                                      onClick={() => handleModelCountChange(model.id, count - 1)}
+                                      disabled={count <= 0}
+                                      aria-label="Уменьшить количество миниатюр"
+                                    >−</button>
+                                    <input
+                                      type="number"
+                                      className="unit-model-count-input"
+                                      value={count}
+                                      min={0}
+                                      max={effectiveMax}
+                                      onChange={e => {
+                                        const v = parseInt(e.target.value, 10);
+                                        if (!isNaN(v)) handleModelCountChange(model.id, v);
+                                      }}
+                                      aria-label="Количество миниатюр"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="unit-model-count-btn"
+                                      onClick={() => handleModelCountChange(model.id, count + 1)}
+                                      disabled={count >= effectiveMax}
+                                      aria-label="Увеличить количество миниатюр"
+                                    >+</button>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                            {(totalCount < minTotal || totalCount > maxTotal) && (
+                              <li className="unit-model-count-hint">
+                                Итого: {totalCount} / {maxTotal} (мин. {minTotal})
+                              </li>
+                            )}
+                          </ul>
+                        );
+                      }
+
+                      // Случай 2: обычный отряд с единым счётчиком (Poxwalkers и подобные)
                       // Передаём costBands и callback в renderRosterModels,
                       // чтобы дочерние [M] могли показать контролы и обновить modelCount у [U]
                       const bands = primaryUnit.costBands;
