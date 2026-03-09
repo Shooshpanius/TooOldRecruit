@@ -45,6 +45,14 @@ function findMultiModelContainer(models?: Unit[]): Unit | undefined {
   return undefined;
 }
 
+// Определяет, является ли модель «ведущей» — не зависит от числа других моделей через правило 1:N.
+// Ведущие модели определяют максимальное количество зависимых (например, основные Blightlord Terminators).
+function isPrimaryContainerModel(modelMaxInRoster: number | undefined, maxContainer: number): boolean {
+  if (modelMaxInRoster === undefined) return true;
+  const perN = maxContainer / modelMaxInRoster;
+  return !(Number.isInteger(perN) && perN > 1);
+}
+
 // Вычисляет эффективный максимум для одного типа модели с учётом суммарного ограничения.
 // Если maxUnitSize / modelMaxInRoster — целое число N > 1, применяется правило «1 на каждые N моделей»:
 //   effectiveMax = floor(totalCount / N), ограниченное абсолютным лимитом и оставшимся местом в контейнере.
@@ -156,6 +164,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       const canAdd = isValidTotal && (remainingPoints === undefined || cost <= remainingPoints);
       const inRoster = countInRoster(unit.id);
       const limitReached = unit.maxInRoster !== undefined && inRoster >= unit.maxInRoster;
+      // Ведущие модели (не зависят от числа других) — вверх списка
+      const sortedContainerModels = [
+        ...containerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxContainer)),
+        ...containerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxContainer)),
+      ];
       return (
         <li key={unit.id} className="unit-item">
           <div className="unit-item-top">
@@ -201,12 +214,13 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
             </ul>
           )}
           <ul className="unit-nested-models">
-            {containerModels.map(model => {
+            {sortedContainerModels.map(model => {
               const count = modelCounts[model.id] ?? 0;
               const otherTotal = containerTotal - count;
               const effectiveMax = calcEffectiveMax(model.maxInRoster, maxContainer, otherTotal, totalCount, maxContainer + mandatoryCount);
+              const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxContainer);
               return (
-                <li key={model.id} className="unit-nested-model-item">
+                <li key={model.id} className={`unit-nested-model-item${isPrimary ? ' unit-nested-model-item--primary' : ''}`}>
                   <span className="unit-nested-model-name">
                     {model.name}
                     <span className="unit-type-badge">[M]</span>
