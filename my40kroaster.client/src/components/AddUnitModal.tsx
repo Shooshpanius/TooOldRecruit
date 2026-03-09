@@ -51,50 +51,35 @@ function gcd(a: number, b: number): number {
   return a;
 }
 
-// Определяет «период» ограничения: perModels — размер группы (например, 5 для "1 на 5"),
-// perCount — сколько моделей данного типа разрешено на одну группу (например, 3 для "3 на 5").
-// Пример: maxInRoster=2, maxUnitSize=10 → gcd=2 → perModels=5, perCount=1 ("1 на 5").
-// Пример: maxInRoster=6, maxUnitSize=10 → gcd=2 → perModels=5, perCount=3 ("3 на 5").
-// Пример: maxInRoster=1, maxUnitSize=10 → gcd=1 → perModels=10, perCount=1 ("1 на 10" = мин-размер).
-function getPerGroup(modelMaxInRoster: number, maxUnitSize: number): { perModels: number; perCount: number } {
-  const g = gcd(modelMaxInRoster, maxUnitSize);
-  return { perModels: maxUnitSize / g, perCount: modelMaxInRoster / g };
-}
-
-// Определяет, является ли модель «только при минимальном размере отряда»:
-// период > половины максимального отряда означает, что правило "1 на N" срабатывает
-// только для минимального состава (например, plague spewer and CCW: "1 на 10" при maxUnitSize=10).
-function isMinSizeOnlyModel(modelMaxInRoster: number | undefined, maxUnitSize: number): boolean {
-  if (modelMaxInRoster === undefined) return false;
-  const { perModels } = getPerGroup(modelMaxInRoster, maxUnitSize);
-  return perModels > maxUnitSize / 2;
+// Определяет, является ли модель «только при минимальном размере отряда».
+// Это ИСКЛЮЧИТЕЛЬНО модели с maxInRoster=1 (НОД(1, N) = 1 всегда).
+// Пример: plague spewer+CCW (maxInRoster=1) — ровно 1 в отряде, доступна только при мин-размере.
+// Модели с maxInRoster>1 и НОД>1 подпадают под «perCount на каждые perModels» (не мин-размер).
+// Модели с maxInRoster>1 и НОД=1 (например combi-bolter, maxInRoster=9) — обычный абсолютный лимит.
+function isMinSizeOnlyModel(modelMaxInRoster: number | undefined, _maxUnitSize: number): boolean {
+  return modelMaxInRoster === 1;
 }
 
 // Определяет, является ли модель «ведущей» — не зависит от числа других моделей через правило 1:N.
 // Ведущие модели отображаются вверху списка.
-// Модели «только при минимальном размере» считаются ведущими (например, plague spewer and CCW).
-// Модели «perCount на каждые perModels» — зависимые (secondary), например flail, combi-weapon.
-function isPrimaryContainerModel(modelMaxInRoster: number | undefined, maxUnitSize: number, minUnitSize?: number): boolean {
+// Модели с НОД=1 (combi-bolter, plague spewer) — ведущие.
+// Модели с НОД>1 (flail "1 на 5", combi-weapon "3 на 5") — зависимые (secondary).
+function isPrimaryContainerModel(modelMaxInRoster: number | undefined, maxUnitSize: number, _minUnitSize?: number): boolean {
   if (modelMaxInRoster === undefined) return true;
-  const { perModels } = getPerGroup(modelMaxInRoster, maxUnitSize);
-  if (perModels > 1) {
-    // Модели «только при минимальном размере» считаются ведущими
-    if (minUnitSize !== undefined && perModels > maxUnitSize / 2) return true;
-    return false; // Зависимые (1-per-N, 3-per-5 и т.д.) — secondary
-  }
-  return true;
+  // Зависимые только когда НОД > 1 (есть групповое ограничение)
+  return gcd(modelMaxInRoster, maxUnitSize) === 1;
 }
 
 // Вычисляет эффективный максимум для одного типа модели с учётом суммарного ограничения.
-// Использует НОД-формулу для любого дробного соотношения maxInRoster/maxUnitSize:
-//   effectiveMax = floor(totalCount / perModels) * perCount
-// Специальные случаи:
-//   1. «Только при минимальном размере» (perModels > maxUnitSize/2):
-//      доступна лишь когда totalCount <= minUnitSize, иначе 0.
-//   2. Стандартное правило «perCount на каждые perModels»:
-//      effectiveMax = floor(totalCount / perModels) * perCount.
+// Три случая на основе НОД(maxInRoster, maxUnitSize):
+//   НОД > 1: правило «perCount на каждые perModels» (flail "1 на 5", combi-weapon "3 на 5")
+//            effectiveMax = floor(totalCount / perModels) * perCount
+//   НОД = 1, maxInRoster = 1: «только при минимальном размере» (plague spewer+CCW)
+//            effectiveMax = 0 если totalCount > minUnitSize, иначе min(1, свободных мест)
+//   НОД = 1, maxInRoster > 1: обычный абсолютный лимит (combi-bolter, maxInRoster=9)
+//            effectiveMax = min(maxInRoster, свободных мест)
 // maxTotal — эффективный максимум контейнера (может быть уменьшен до minContainer,
-// если в отряде выбрана модель «только при минимальном размере»).
+// если выбрана модель «только при минимальном размере»).
 function calcEffectiveMax(
   modelMaxInRoster: number | undefined,
   maxTotal: number,
@@ -104,16 +89,18 @@ function calcEffectiveMax(
   minUnitSize?: number,
 ): number {
   if (modelMaxInRoster !== undefined && totalCount !== undefined && maxUnitSize !== undefined) {
-    const { perModels, perCount } = getPerGroup(modelMaxInRoster, maxUnitSize);
-    if (perModels > 1) {
-      // Модель «только при минимальном размере»
-      if (perModels > maxUnitSize / 2 && minUnitSize !== undefined) {
-        if (totalCount > minUnitSize) return 0;
-        return Math.min(modelMaxInRoster, maxTotal - otherTotal);
-      }
+    const g = gcd(modelMaxInRoster, maxUnitSize);
+    if (g > 1) {
       // Правило «perCount на каждые perModels моделей» (1-per-5, 3-per-5 и т.д.)
+      const perModels = maxUnitSize / g;
+      const perCount = modelMaxInRoster / g;
       const allowedByRatio = Math.min(Math.floor(totalCount / perModels) * perCount, modelMaxInRoster);
       return Math.min(allowedByRatio, maxTotal - otherTotal);
+    }
+    if (modelMaxInRoster === 1 && minUnitSize !== undefined) {
+      // «Только при минимальном размере» (plague spewer+CCW)
+      if (totalCount > minUnitSize) return 0;
+      return Math.min(1, maxTotal - otherTotal);
     }
   }
   return Math.min(modelMaxInRoster ?? maxTotal, maxTotal - otherTotal);
