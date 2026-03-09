@@ -854,6 +854,12 @@ body {
   border-bottom: none;
 }
 
+/* Ведущая модель — определяет количество остальных через правило 1:N */
+.unit-nested-model-item--primary {
+  font-weight: 600;
+  color: var(--text);
+}
+
 .unit-nested-model-name {
   flex: 1;
   min-width: 0;
