@@ -553,10 +553,10 @@ export function RosterDetailPage() {
                     {primaryUnit.entryType === 'unit' && primaryUnit.models && primaryUnit.models.length > 0 && (() => {
                       const multiContainerForAll = findMultiModelContainer(primaryUnit.models);
 
-                      // Случай 3: Blightlord-подобный — несколько типов моделей + costBands на [U]
+                      // Случай 3: Blightlord/Deathshroud-подобный — один или несколько типов моделей + costBands на [U]
                       // Стоимость определяется по суммарному числу моделей через costBands
-                      // Отличие от Poxwalkers (Case 2): в контейнере несколько разных типов моделей
-                      if (multiContainerForAll && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) > 1) {
+                      // Поддерживает как несколько типов моделей (Blightlord), так и один тип (Deathshroud Terminators)
+                      if (multiContainerForAll && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1) {
                         const containerModels = multiContainerForAll.models ?? [];
                         const minContainer = multiContainerForAll.minCount ?? 1;
                         const maxContainer = multiContainerForAll.maxCount ?? 99;
