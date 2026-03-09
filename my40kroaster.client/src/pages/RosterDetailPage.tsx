@@ -555,8 +555,9 @@ export function RosterDetailPage() {
 
                       // Случай 3: Blightlord/Deathshroud-подобный — один или несколько типов моделей + costBands на [U]
                       // Стоимость определяется по суммарному числу моделей через costBands
+                      // Отличие от Poxwalkers (Case 2): контейнерный узел имеет явное ограничение maxCount (а не только minCount)
                       // Поддерживает как несколько типов моделей (Blightlord), так и один тип (Deathshroud Terminators)
-                      if (multiContainerForAll && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1) {
+                      if (multiContainerForAll && multiContainerForAll.maxCount !== undefined && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1) {
                         const containerModels = multiContainerForAll.models ?? [];
                         const minContainer = multiContainerForAll.minCount ?? 1;
                         const maxContainer = multiContainerForAll.maxCount ?? 99;

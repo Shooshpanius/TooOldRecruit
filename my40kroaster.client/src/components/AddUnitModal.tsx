@@ -182,9 +182,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
 
     // Случай 3: Blightlord/Deathshroud-подобный — один или несколько типов моделей + стоимость по costBands на [U]
     // Отличие от Ironstrider: стоимость определяется по суммарному числу моделей через costBands, а не по сумме индивидуальных стоимостей
-    // Отличие от Poxwalkers (Case 2): есть контейнерный узел с ограничениями min/max
+    // Отличие от Poxwalkers (Case 2): контейнерный узел имеет явное ограничение maxCount (а не только minCount)
     // Поддерживает как несколько типов моделей (Blightlord), так и один тип (Deathshroud Terminators)
-    if (multiContainerForAll && unit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1) {
+    if (multiContainerForAll && multiContainerForAll.maxCount !== undefined && unit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1) {
       const containerModels = multiContainerForAll.models ?? [];
       const minContainer = multiContainerForAll.minCount ?? 1;
       const maxContainer = multiContainerForAll.maxCount ?? 99;
