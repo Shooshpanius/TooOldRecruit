@@ -45,30 +45,56 @@ function findMultiModelContainer(models?: Unit[]): Unit | undefined {
   return undefined;
 }
 
+// Наибольший общий делитель (алгоритм Евклида)
+function gcd(a: number, b: number): number {
+  while (b !== 0) { const temp = b; b = a % b; a = temp; }
+  return a;
+}
+
+// Определяет «период» ограничения: perModels — размер группы (например, 5 для "1 на 5"),
+// perCount — сколько моделей данного типа разрешено на одну группу (например, 3 для "3 на 5").
+// Пример: maxInRoster=2, maxUnitSize=10 → gcd=2 → perModels=5, perCount=1 ("1 на 5").
+// Пример: maxInRoster=6, maxUnitSize=10 → gcd=2 → perModels=5, perCount=3 ("3 на 5").
+// Пример: maxInRoster=1, maxUnitSize=10 → gcd=1 → perModels=10, perCount=1 ("1 на 10" = мин-размер).
+function getPerGroup(modelMaxInRoster: number, maxUnitSize: number): { perModels: number; perCount: number } {
+  const g = gcd(modelMaxInRoster, maxUnitSize);
+  return { perModels: maxUnitSize / g, perCount: modelMaxInRoster / g };
+}
+
+// Определяет, является ли модель «только при минимальном размере отряда»:
+// период > половины максимального отряда означает, что правило "1 на N" срабатывает
+// только для минимального состава (например, plague spewer and CCW: "1 на 10" при maxUnitSize=10).
+function isMinSizeOnlyModel(modelMaxInRoster: number | undefined, maxUnitSize: number): boolean {
+  if (modelMaxInRoster === undefined) return false;
+  const { perModels } = getPerGroup(modelMaxInRoster, maxUnitSize);
+  return perModels > maxUnitSize / 2;
+}
+
 // Определяет, является ли модель «ведущей» — не зависит от числа других моделей через правило 1:N.
-// Ведущие модели определяют максимальное количество зависимых (например, основные Blightlord Terminators).
-// maxUnitSize — полный размер отряда (maxContainer + mandatoryCount), как в calcEffectiveMax.
-// minUnitSize — минимальный размер отряда (minContainer + mandatoryCount).
-// Если perN > maxUnitSize/2, модель доступна «только при минимальном размере» (не правило «1 на N»),
-// и должна быть классифицирована как ведущая (например, Blightlord Terminator w/ plague spewer and CCW).
+// Ведущие модели отображаются вверху списка.
+// Модели «только при минимальном размере» считаются ведущими (например, plague spewer and CCW).
+// Модели «perCount на каждые perModels» — зависимые (secondary), например flail, combi-weapon.
 function isPrimaryContainerModel(modelMaxInRoster: number | undefined, maxUnitSize: number, minUnitSize?: number): boolean {
   if (modelMaxInRoster === undefined) return true;
-  const perN = maxUnitSize / modelMaxInRoster;
-  if (Number.isInteger(perN) && perN > 1) {
-    // Модели, у которых perN > maxUnitSize/2, — это «только при минимальном размере отряда».
-    // Они не следуют правилу «1 на N» и должны считаться ведущими.
-    if (minUnitSize !== undefined && perN > maxUnitSize / 2) return true;
-    return false;
+  const { perModels } = getPerGroup(modelMaxInRoster, maxUnitSize);
+  if (perModels > 1) {
+    // Модели «только при минимальном размере» считаются ведущими
+    if (minUnitSize !== undefined && perModels > maxUnitSize / 2) return true;
+    return false; // Зависимые (1-per-N, 3-per-5 и т.д.) — secondary
   }
   return true;
 }
 
 // Вычисляет эффективный максимум для одного типа модели с учётом суммарного ограничения.
-// Если maxUnitSize / modelMaxInRoster — целое число N > 1, применяется одно из двух правил:
-//   1. «Только при минимальном размере отряда» (perN > maxUnitSize/2): модель доступна
-//      лишь когда totalCount <= minUnitSize (например, Blightlord Terminator w/ plague spewer and CCW).
-//   2. «1 на каждые N моделей» (perN <= maxUnitSize/2):
-//      effectiveMax = floor(totalCount / N), ограниченное абсолютным лимитом и оставшимся местом.
+// Использует НОД-формулу для любого дробного соотношения maxInRoster/maxUnitSize:
+//   effectiveMax = floor(totalCount / perModels) * perCount
+// Специальные случаи:
+//   1. «Только при минимальном размере» (perModels > maxUnitSize/2):
+//      доступна лишь когда totalCount <= minUnitSize, иначе 0.
+//   2. Стандартное правило «perCount на каждые perModels»:
+//      effectiveMax = floor(totalCount / perModels) * perCount.
+// maxTotal — эффективный максимум контейнера (может быть уменьшен до minContainer,
+// если в отряде выбрана модель «только при минимальном размере»).
 function calcEffectiveMax(
   modelMaxInRoster: number | undefined,
   maxTotal: number,
@@ -78,15 +104,15 @@ function calcEffectiveMax(
   minUnitSize?: number,
 ): number {
   if (modelMaxInRoster !== undefined && totalCount !== undefined && maxUnitSize !== undefined) {
-    const perN = maxUnitSize / modelMaxInRoster;
-    if (Number.isInteger(perN) && perN > 1) {
-      // Модель «только при минимальном размере» (perN > maxUnitSize/2)
-      if (perN > maxUnitSize / 2 && minUnitSize !== undefined) {
+    const { perModels, perCount } = getPerGroup(modelMaxInRoster, maxUnitSize);
+    if (perModels > 1) {
+      // Модель «только при минимальном размере»
+      if (perModels > maxUnitSize / 2 && minUnitSize !== undefined) {
         if (totalCount > minUnitSize) return 0;
         return Math.min(modelMaxInRoster, maxTotal - otherTotal);
       }
-      // Стандартное правило «1 на каждые N моделей»
-      const allowedByRatio = Math.min(Math.floor(totalCount / perN), modelMaxInRoster);
+      // Правило «perCount на каждые perModels моделей» (1-per-5, 3-per-5 и т.д.)
+      const allowedByRatio = Math.min(Math.floor(totalCount / perModels) * perCount, modelMaxInRoster);
       return Math.min(allowedByRatio, maxTotal - otherTotal);
     }
   }
@@ -180,15 +206,23 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       const containerTotal = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? 0), 0);
       const totalCount = containerTotal + mandatoryCount;
       const cost = getCostForModelCount(unit.costBands, totalCount);
-      const isValidTotal = containerTotal >= minContainer && containerTotal <= maxContainer;
+      // maxUnitSize = максимальный размер отряда (контейнер + обязательные)
+      const maxUnitSize = maxContainer + mandatoryCount;
+      const minUnitSize = minContainer + mandatoryCount;
+      // Если выбрана модель «только при минимальном размере» (plague spewer+CCW) —
+      // контейнер жёстко ограничен минимальным размером: не более minContainer моделей.
+      const isMinSizeOnlySelected = containerModels.some(
+        m => isMinSizeOnlyModel(m.maxInRoster, maxUnitSize) && (modelCounts[m.id] ?? 0) > 0
+      );
+      const effectiveMaxContainer = isMinSizeOnlySelected ? minContainer : maxContainer;
+      const isValidTotal = containerTotal >= minContainer && containerTotal <= effectiveMaxContainer;
       const canAdd = isValidTotal && (remainingPoints === undefined || cost <= remainingPoints);
       const inRoster = countInRoster(unit.id);
       const limitReached = unit.maxInRoster !== undefined && inRoster >= unit.maxInRoster;
       // Ведущие модели (не зависят от числа других) — вверх списка
-      const minUnitSize = minContainer + mandatoryCount;
       const sortedContainerModels = [
-        ...containerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxContainer + mandatoryCount, minUnitSize)),
-        ...containerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxContainer + mandatoryCount, minUnitSize)),
+        ...containerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize, minUnitSize)),
+        ...containerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize, minUnitSize)),
       ];
       return (
         <li key={unit.id} className="unit-item">
@@ -238,8 +272,8 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
             {sortedContainerModels.map(model => {
               const count = modelCounts[model.id] ?? 0;
               const otherTotal = containerTotal - count;
-              const effectiveMax = calcEffectiveMax(model.maxInRoster, maxContainer, otherTotal, totalCount, maxContainer + mandatoryCount, minUnitSize);
-              const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxContainer + mandatoryCount, minUnitSize);
+              const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, totalCount, maxUnitSize, minUnitSize);
+              const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize, minUnitSize);
               return (
                 <li key={model.id} className={`unit-nested-model-item${isPrimary ? ' unit-nested-model-item--primary' : ''}`}>
                   <span className="unit-nested-model-name">
@@ -283,7 +317,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
           </ul>
           {!isValidTotal && (
             <div className="unit-model-count-hint">
-              Выберите от {minContainer} до {maxContainer} миниатюр (выбрано: {containerTotal})
+              Выберите от {minContainer} до {effectiveMaxContainer} миниатюр (выбрано: {containerTotal})
             </div>
           )}
         </li>
