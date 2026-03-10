@@ -58,13 +58,25 @@ function countAllModels(models: Unit[], counts: Record<string, number>): number 
 }
 
 // Рекурсивно проверяет, удовлетворяет ли текущий набор счётчиков минимальным (и максимальным)
-// требованиям всех контейнеров. Используется для блокировки кнопки «Добавить» при нарушении min.
+// требованиям всех контейнеров, а также правилам взаимоисключающих групп.
+// Используется для блокировки кнопки «Добавить» при нарушении min или конфликте группы.
 function validateCompositionMinima(models: Unit[], counts: Record<string, number>): boolean {
   for (const m of models) {
     if (m.entryType === undefined && m.models && m.models.length > 0) {
       const subTotal = countAllModels(m.models, counts);
       if (m.minCount !== undefined && subTotal < m.minCount) return false;
       if (m.maxCount !== undefined && subTotal > m.maxCount) return false;
+      // Проверяем взаимоисключающие группы: в каждой группе не более одной выбранной модели
+      const groupsWithSelection = new Set<string>();
+      for (const sub of m.models) {
+        if (sub.exclusiveGroup) {
+          const cnt = counts[sub.id] ?? sub.minCount ?? 0;
+          if (cnt > 0) {
+            if (groupsWithSelection.has(sub.exclusiveGroup)) return false; // конфликт
+            groupsWithSelection.add(sub.exclusiveGroup);
+          }
+        }
+      }
       if (!validateCompositionMinima(m.models, counts)) return false;
     }
   }
@@ -135,9 +147,18 @@ function renderFixedCompositionControls(
     const ownCount = counts[model.id] ?? minCount;
     // Свободных слотов в родительском контейнере: parentMax − (все остальные модели)
     const otherInContainer = containerTotal - ownCount;
-    const effectiveMax = parentMaxCount !== undefined
+    let effectiveMax = parentMaxCount !== undefined
       ? Math.min(maxPerModel, parentMaxCount - otherInContainer)
       : maxPerModel;
+    // Взаимоисключающая группа: если другая модель из той же группы уже выбрана (count > 0) — блокируем
+    if (model.exclusiveGroup) {
+      const groupConflict = models.some(
+        sibling => sibling.id !== model.id
+          && sibling.exclusiveGroup === model.exclusiveGroup
+          && (counts[sibling.id] ?? sibling.minCount ?? 0) > 0
+      );
+      if (groupConflict) effectiveMax = 0;
+    }
     // Нижняя граница: не ниже minCount, но и не выше effectiveMax (если контейнер переполнен)
     const effectiveCap = Math.max(effectiveMax, minCount);
     const setCount = (val: number) => {

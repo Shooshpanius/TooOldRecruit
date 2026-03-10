@@ -55,6 +55,9 @@ export interface Unit {
   maxCount?: number;
   // Количество миниатюр по каждому типу модели (для отрядов с несколькими типами моделей)
   modelCounts?: Record<string, number>;
+  // Идентификатор взаимоисключающей группы: модели с одинаковым exclusiveGroup — «максимум одна из группы».
+  // Выводится в buildChildTree из CONTAINER_EXCLUSIVE_GROUPS (API не сохраняет selectionEntryGroup из BSData).
+  exclusiveGroup?: string;
 }
 
 export interface RosterUnit extends Unit {

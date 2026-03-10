@@ -201,6 +201,22 @@ const DEFAULT_UNITS: Unit[] = [
   { id: 'unit-18', name: 'Drop Pod', category: 'Dedicated Transport', cost: 65 },
 ];
 
+// Карта взаимоисключающих групп по id контейнера.
+// Ключ — id контейнера, значение — массив групп (каждая группа = список id моделей, из которых можно выбрать максимум одну).
+// Необходимо, т.к. API (wh40kcards.ru) не сохраняет структуру selectionEntryGroup из BSData.
+// При обновлении данных игры — искать в BSData узлы типа selectionEntryGroup с maxSelections=1,
+// извлекать их id дочерних моделей и добавлять соответствующую запись сюда.
+const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
+  // Skitarii Rangers: «9 Skitarii Rangers» — data-tether XOR omnispex
+  '24a0-5541-79b2-b1ff': [['f525-f4d5-1ea1-ecaf', '626e-72e0-7869-82c1']],
+  // Skitarii Vanguard: «Skitarii Vanguard» — data-tether XOR omnispex
+  'c00c-540d-818e-9f44': [['ef06-ef9-2ff7-f92d', 'd3d5-8552-186c-8436']],
+  // Secutarii Hoplites [Legends]
+  'cf89-9b00-1708-2d59': [['30e9-da2c-e26b-fc20', 'a393-2cf0-b5f6-c624']],
+  // Secutarii Peltasts [Legends]
+  '347a-c7c2-1bc8-db33': [['efff-ac31-c7a5-93c6', 'fec1-2c41-7ea4-480e']],
+};
+
 export async function getUnits(factionId: string): Promise<Unit[]> {
   try {
     const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`);
@@ -415,8 +431,20 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
             // Промежуточный контейнер — передаём parentCostBands дальше по дереву.
             // isNestedInContainer=true запрещает создание синтетического контейнера в рекурсивном вызове,
             // чтобы модели внутри независимых контейнеров (Case 4) не обёртывались лишним слоем.
-            const nested = buildChildTree(child.children, parentCostBands, true);
-            if (nested.length > 0) {
+            const nestedRaw = buildChildTree(child.children, parentCostBands, true);
+            if (nestedRaw.length > 0) {
+              // Аннотируем модели метками взаимоисключающих групп (API не сохраняет selectionEntryGroup из BSData)
+              const exclusiveGroupsForContainer = CONTAINER_EXCLUSIVE_GROUPS[child.id ?? ''];
+              const nested = exclusiveGroupsForContainer
+                ? nestedRaw.map(m => {
+                    for (let gi = 0; gi < exclusiveGroupsForContainer.length; gi++) {
+                      if (exclusiveGroupsForContainer[gi].includes(m.id)) {
+                        return { ...m, exclusiveGroup: `${child.id}-excl-${gi}` };
+                      }
+                    }
+                    return m;
+                  })
+                : nestedRaw;
               result.push({
                 id: child.id ?? child.name ?? '',
                 name: child.name ?? '',

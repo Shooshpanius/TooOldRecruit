@@ -204,9 +204,18 @@ function renderFixedCompositionControls(
     const maxPerModel = model.maxInRoster ?? 0;
     const ownCount = counts[model.id] ?? minCount;
     const otherInContainer = containerTotal - ownCount;
-    const effectiveMax = parentMaxCount !== undefined
+    let effectiveMax = parentMaxCount !== undefined
       ? Math.min(maxPerModel, parentMaxCount - otherInContainer)
       : maxPerModel;
+    // Взаимоисключающая группа: если другая модель из той же группы уже выбрана (count > 0) — блокируем
+    if (model.exclusiveGroup) {
+      const groupConflict = models.some(
+        sibling => sibling.id !== model.id
+          && sibling.exclusiveGroup === model.exclusiveGroup
+          && (counts[sibling.id] ?? sibling.minCount ?? 0) > 0
+      );
+      if (groupConflict) effectiveMax = 0;
+    }
     const effectiveCap = Math.max(effectiveMax, minCount);
     const setCount = (val: number) => {
       onCountChange(model.id, Math.max(minCount, Math.min(val, effectiveCap)));
