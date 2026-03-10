@@ -211,6 +211,60 @@ function gcd(a: number, b: number): number {
   return a;
 }
 
+// Вычисляет эффективный максимум контейнера с учётом перекрёстных ограничений (Case 4).
+// Если в юните есть «ведущий» контейнер с бо́льшим maxCount и отношение ratio = bigMax/smallMax —
+// целое число > 1, то максимум = floor(totalОтВедущегоКонтейнера / ratio).
+// Пример: Gun Servitors (max=2) при Acolytes (max=10): ratio=5 → max=floor(acolytesTotal/5).
+// Результат: 0–4 агентов → max 0; 5–9 → max 1; 10 → max 2. Соответствует правилу игры.
+function calcCase4ContainerMax(container: Unit, allContainers: Unit[], counts: Record<string, number>): number {
+  const cMax = container.maxCount;
+  if (cMax === undefined) return 99;
+  for (const other of allContainers) {
+    if (other.id === container.id) continue;
+    const otherMax = other.maxCount;
+    if (otherMax === undefined || otherMax <= cMax) continue;
+    const ratio = otherMax / cMax;
+    if (Number.isInteger(ratio) && ratio > 1) {
+      const otherTotal = (other.models ?? []).reduce((s, m) => s + (counts[m.id] ?? 0), 0);
+      return Math.floor(otherTotal / ratio);
+    }
+  }
+  return cMax;
+}
+
+// Вычисляет эффективный максимум модели внутри контейнера (Case 4).
+// Если maxInRoster < effectiveCMax и НОД > 1 — правило «perCount на каждые perN»:
+//   effectiveMax = floor(cTotal / perN) * perCount, ограничено ёмкостью контейнера.
+// Иначе — простое ограничение по оставшейся ёмкости: min(maxInRoster, effectiveCMax − others).
+// Пример: специальный агент (maxInRoster=2) в 10-сильном контейнере: НОД=2, perN=5 →
+//   effectiveMax = floor(cTotal/5), т.е. 1 специальный на каждые 5 агентов.
+// Math.max(0, ...) гарантирует неотрицательный результат при переполнении контейнера.
+function calcCase4ModelMax(modelMaxInRoster: number | undefined, effectiveCMax: number, cTotal: number, count: number): number {
+  const maxPerModel = modelMaxInRoster ?? effectiveCMax;
+  const otherInContainer = cTotal - count;
+  // Применяем per-N формулу только когда модель меньше ёмкости и есть кратное отношение
+  if (maxPerModel < effectiveCMax) {
+    const g = gcd(maxPerModel, effectiveCMax);
+    if (g > 1 && g < effectiveCMax) {
+      const perN = effectiveCMax / g;
+      const perCount = maxPerModel / g;
+      const byRatio = Math.min(Math.floor(cTotal / perN) * perCount, maxPerModel);
+      return Math.max(0, Math.min(byRatio, effectiveCMax - otherInContainer));
+    }
+  }
+  return Math.max(0, Math.min(maxPerModel, effectiveCMax - otherInContainer));
+}
+
+// Возвращает «ведущий» контейнер — с наибольшим maxCount.
+// Для Case 4: стоимость отряда считается по ведущему контейнеру (Acolytes, не Servitors),
+// так как costBands калиброваны по числу агентов (5–10), а не по суммарному размеру отряда.
+function findCase4PrimaryContainer(allContainers: Unit[]): Unit | undefined {
+  return allContainers.reduce<Unit | undefined>((best, c) => {
+    const bestMax = best?.maxCount ?? -1;
+    return (c.maxCount ?? -1) > bestMax ? c : best;
+  }, undefined);
+}
+
 // Определяет, является ли модель «только при минимальном размере отряда».
 // Это ИСКЛЮЧИТЕЛЬНО модели с maxInRoster=1 (НОД(1, N) = 1 всегда).
 // Пример: plague spewer+CCW (maxInRoster=1) — ровно 1 в отряде, доступна только при мин-размере.
@@ -354,12 +408,16 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
         (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (modelCounts[m.id] ?? 0), 0),
         0
       );
-      const cost = getCostForModelCount(unit.costBands!, totalCount);
-      // Все контейнеры должны удовлетворять своим минимальным ограничениям
+      // Стоимость считается по «ведущему» контейнеру (наибольший maxCount = Acolytes),
+      // т.к. costBands калиброваны под число агентов (5–10), а не суммарный размер с сервиторами.
+      const primaryContainer = findCase4PrimaryContainer(allBoundedContainers);
+      const primaryModelCount = (primaryContainer?.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? 0), 0);
+      const cost = getCostForModelCount(unit.costBands!, primaryModelCount);
+      // Все контейнеры должны удовлетворять своим ограничениям с учётом перекрёстных зависимостей
       const containersValid = allBoundedContainers.every(c => {
         const cTotal = (c.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? 0), 0);
-        return (c.minCount === undefined || cTotal >= c.minCount) &&
-               (c.maxCount === undefined || cTotal <= c.maxCount);
+        const effectiveCMax = calcCase4ContainerMax(c, allBoundedContainers, modelCounts);
+        return (c.minCount === undefined || cTotal >= c.minCount) && cTotal <= effectiveCMax;
       });
       const canAdd = containersValid && (remainingPoints === undefined || cost <= remainingPoints);
       const inRoster = countInRoster(unit.id);
@@ -388,7 +446,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   modelCounts: Object.fromEntries(
                     allBoundedContainers.flatMap(c => (c.models ?? []).map(m => [m.id, modelCounts[m.id] ?? 0]))
                   ),
-                  modelCount: totalCount,
+                  modelCount: primaryModelCount,
                 })}
                 disabled={!canAdd || limitReached}
                 aria-label={attachMode ? 'Присоединить' : 'Добавить'}
@@ -401,30 +459,27 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
             const cModels = container.models ?? [];
             const cTotal = cModels.reduce((s, m) => s + (modelCounts[m.id] ?? 0), 0);
             const cMin = container.minCount;
-            const cMax = container.maxCount;
+            // Эффективный максимум с учётом перекрёстных ограничений между контейнерами
+            const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, modelCounts);
             const isBelowMin = cMin !== undefined && cTotal < cMin;
-            const rangeStr = cMax !== undefined
-              ? (cMin !== undefined && cMin !== cMax ? `${cMin}–${cMax}` : String(cMax))
-              : undefined;
+            const isAboveMax = cTotal > effectiveCMax;
+            // Показываем актуальный эффективный максимум (динамически меняется)
+            const rangeStr = cMin !== undefined && cMin !== effectiveCMax
+              ? `${cMin}–${effectiveCMax}`
+              : String(effectiveCMax);
             return (
               <div key={container.id} className="unit-container-section">
                 <div className="unit-container-section-header">
                   <span className="unit-container-section-name">{container.name}</span>
-                  {rangeStr !== undefined && (
-                    <span className={`unit-model-count-label${isBelowMin ? ' unit-model-count-label--error' : ''}`}>
-                      {cTotal}/{rangeStr}
-                    </span>
-                  )}
+                  <span className={`unit-model-count-label${(isBelowMin || isAboveMax) ? ' unit-model-count-label--error' : ''}`}>
+                    {cTotal}/{rangeStr}
+                  </span>
                 </div>
                 <ul className="unit-nested-models">
                   {cModels.map(model => {
                     const count = modelCounts[model.id] ?? 0;
-                    const maxPerModel = model.maxInRoster ?? 0;
-                    const otherInContainer = cTotal - count;
-                    // Максимум = min(maxInRoster модели, оставшихся мест в контейнере)
-                    const effectiveMax = cMax !== undefined
-                      ? Math.min(maxPerModel, cMax - otherInContainer)
-                      : maxPerModel;
+                    // per-N формула для моделей-специалистов; простая ёмкость для базовых моделей
+                    const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
                     return (
                       <li key={model.id} className="unit-nested-model-item">
                         <span className="unit-nested-model-name">
@@ -463,9 +518,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                       </li>
                     );
                   })}
-                  {isBelowMin && (
+                  {(isBelowMin || isAboveMax) && (
                     <li className="unit-model-count-hint unit-model-count-hint--error">
-                      Необходимо не менее {cMin} (выбрано: {cTotal})
+                      {isAboveMax
+                        ? `Максимум ${effectiveCMax} (выбрано: ${cTotal})`
+                        : `Необходимо не менее ${cMin} (выбрано: ${cTotal})`}
                     </li>
                   )}
                 </ul>

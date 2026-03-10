@@ -44,6 +44,55 @@ function gcd(a: number, b: number): number {
   return a;
 }
 
+// Вычисляет эффективный максимум контейнера с учётом перекрёстных ограничений (Case 4).
+// Если в юните есть «ведущий» контейнер с бо́льшим maxCount и отношение ratio = bigMax/smallMax —
+// целое число > 1, то максимум = floor(totalОтВедущегоКонтейнера / ratio).
+// Пример: Gun Servitors (max=2) при Acolytes (max=10): ratio=5 → max=floor(acolytesTotal/5).
+function calcCase4ContainerMax(container: Unit, allContainers: Unit[], counts: Record<string, number>): number {
+  const cMax = container.maxCount;
+  if (cMax === undefined) return 99;
+  for (const other of allContainers) {
+    if (other.id === container.id) continue;
+    const otherMax = other.maxCount;
+    if (otherMax === undefined || otherMax <= cMax) continue;
+    const ratio = otherMax / cMax;
+    if (Number.isInteger(ratio) && ratio > 1) {
+      const otherTotal = (other.models ?? []).reduce((s, m) => s + (counts[m.id] ?? 0), 0);
+      return Math.floor(otherTotal / ratio);
+    }
+  }
+  return cMax;
+}
+
+// Вычисляет эффективный максимум модели внутри контейнера (Case 4).
+// Если maxInRoster < effectiveCMax и НОД > 1 — правило «perCount на каждые perN».
+// Иначе — простое ограничение по оставшейся ёмкости: min(maxInRoster, effectiveCMax − others).
+// Math.max(0, ...) гарантирует неотрицательный результат при переполнении контейнера.
+function calcCase4ModelMax(modelMaxInRoster: number | undefined, effectiveCMax: number, cTotal: number, count: number): number {
+  const maxPerModel = modelMaxInRoster ?? effectiveCMax;
+  const otherInContainer = cTotal - count;
+  if (maxPerModel < effectiveCMax) {
+    const g = gcd(maxPerModel, effectiveCMax);
+    if (g > 1 && g < effectiveCMax) {
+      const perN = effectiveCMax / g;
+      const perCount = maxPerModel / g;
+      const byRatio = Math.min(Math.floor(cTotal / perN) * perCount, maxPerModel);
+      return Math.max(0, Math.min(byRatio, effectiveCMax - otherInContainer));
+    }
+  }
+  return Math.max(0, Math.min(maxPerModel, effectiveCMax - otherInContainer));
+}
+
+// Возвращает «ведущий» контейнер — с наибольшим maxCount.
+// Для Case 4: стоимость отряда считается по ведущему контейнеру (Acolytes, не Servitors),
+// так как costBands калиброваны по числу агентов (5–10), а не по суммарному размеру отряда.
+function findCase4PrimaryContainer(allContainers: Unit[]): Unit | undefined {
+  return allContainers.reduce<Unit | undefined>((best, c) => {
+    const bestMax = best?.maxCount ?? -1;
+    return (c.maxCount ?? -1) > bestMax ? c : best;
+  }, undefined);
+}
+
 // Определяет, является ли модель «только при минимальном размере отряда».
 // Это ИСКЛЮЧИТЕЛЬНО модели с maxInRoster=1 (НОД(1, N) = 1 всегда).
 // Пример: plague spewer+CCW (maxInRoster=1) — ровно 1 в отряде, доступна только при мин-размере.
@@ -697,31 +746,31 @@ export function RosterDetailPage() {
                           (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (currentCounts[m.id] ?? 0), 0),
                           0
                         );
+                        // Стоимость считается по «ведущему» контейнеру (Acolytes, а не Servitors)
+                        const primaryContainer = findCase4PrimaryContainer(allBoundedContainers);
 
                         const handleModelCountChange = (containerId: string, modelId: string, val: number) => {
                           const container = allBoundedContainers.find(c => c.id === containerId);
                           if (!container) return;
                           const cModels = container.models ?? [];
-                          const cMax = container.maxCount;
+                          // Эффективный максимум контейнера с учётом перекрёстных ограничений
+                          const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
                           const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? 0), 0);
-                          const otherInContainer = cTotal - (currentCounts[modelId] ?? 0);
                           const model = cModels.find(m => m.id === modelId);
-                          const maxPerModel = model?.maxInRoster ?? 0;
-                          const effectiveMax = cMax !== undefined
-                            ? Math.min(maxPerModel, cMax - otherInContainer)
-                            : maxPerModel;
+                          const count = currentCounts[modelId] ?? 0;
+                          const effectiveMax = calcCase4ModelMax(model?.maxInRoster, effectiveCMax, cTotal, count);
                           const clamped = Math.min(effectiveMax, Math.max(0, val));
                           const newCounts = { ...currentCounts, [modelId]: clamped };
-                          const newTotal = allBoundedContainers.reduce(
-                            (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (newCounts[m.id] ?? 0), 0),
-                            0
+                          // Стоимость пересчитывается по ведущему контейнеру
+                          const primaryModelCount = (primaryContainer?.models ?? []).reduce(
+                            (s, m) => s + (newCounts[m.id] ?? 0), 0
                           );
-                          const newCost = getCostForModelCount(bands, newTotal);
+                          const newCost = getCostForModelCount(bands, primaryModelCount);
                           const updated = unitGroups.map(g => g.id === group.id
                             ? {
                                 ...g,
                                 units: g.units.map((u, idx) => idx === 0
-                                  ? { ...u, modelCounts: newCounts, modelCount: newTotal, cost: newCost }
+                                  ? { ...u, modelCounts: newCounts, modelCount: primaryModelCount, cost: newCost }
                                   : u
                                 )
                               }
@@ -737,29 +786,26 @@ export function RosterDetailPage() {
                               const cModels = container.models ?? [];
                               const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? 0), 0);
                               const cMin = container.minCount;
-                              const cMax = container.maxCount;
+                              // Эффективный максимум с учётом перекрёстных зависимостей между контейнерами
+                              const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
                               const isBelowMin = cMin !== undefined && cTotal < cMin;
-                              const rangeStr = cMax !== undefined
-                                ? (cMin !== undefined && cMin !== cMax ? `${cMin}–${cMax}` : String(cMax))
-                                : undefined;
+                              const isAboveMax = cTotal > effectiveCMax;
+                              const rangeStr = cMin !== undefined && cMin !== effectiveCMax
+                                ? `${cMin}–${effectiveCMax}`
+                                : String(effectiveCMax);
                               return (
                                 <div key={container.id} className="unit-container-section">
                                   <div className="unit-container-section-header">
                                     <span className="unit-container-section-name">{container.name}</span>
-                                    {rangeStr !== undefined && (
-                                      <span className={`unit-model-count-label${isBelowMin ? ' unit-model-count-label--error' : ''}`}>
-                                        {cTotal}/{rangeStr}
-                                      </span>
-                                    )}
+                                    <span className={`unit-model-count-label${(isBelowMin || isAboveMax) ? ' unit-model-count-label--error' : ''}`}>
+                                      {cTotal}/{rangeStr}
+                                    </span>
                                   </div>
                                   <ul className="unit-nested-models unit-nested-models--roster">
                                     {cModels.map(model => {
                                       const count = currentCounts[model.id] ?? 0;
-                                      const maxPerModel = model.maxInRoster ?? 0;
-                                      const otherInContainer = cTotal - count;
-                                      const effectiveMax = cMax !== undefined
-                                        ? Math.min(maxPerModel, cMax - otherInContainer)
-                                        : maxPerModel;
+                                      // per-N формула для моделей-специалистов; простая ёмкость для базовых
+                                      const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
                                       return (
                                         <li key={model.id} className="unit-nested-model-item">
                                           <span className="unit-nested-model-name">
@@ -798,9 +844,11 @@ export function RosterDetailPage() {
                                         </li>
                                       );
                                     })}
-                                    {isBelowMin && (
+                                    {(isBelowMin || isAboveMax) && (
                                       <li className="unit-model-count-hint unit-model-count-hint--error">
-                                        Необходимо не менее {cMin} (выбрано: {cTotal})
+                                        {isAboveMax
+                                          ? `Максимум ${effectiveCMax} (выбрано: ${cTotal})`
+                                          : `Необходимо не менее ${cMin} (выбрано: ${cTotal})`}
                                       </li>
                                     )}
                                   </ul>
