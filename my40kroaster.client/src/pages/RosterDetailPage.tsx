@@ -743,7 +743,7 @@ export function RosterDetailPage() {
                         const bands = primaryUnit.costBands!;
                         const currentCounts = primaryUnit.modelCounts ?? {};
                         const totalCount = allBoundedContainers.reduce(
-                          (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (currentCounts[m.id] ?? 0), 0),
+                          (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0),
                           0
                         );
                         // Стоимость считается по «ведущему» контейнеру (Acolytes, а не Servitors)
@@ -755,11 +755,11 @@ export function RosterDetailPage() {
                           const cModels = container.models ?? [];
                           // Эффективный максимум контейнера с учётом перекрёстных ограничений
                           const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
-                          const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? 0), 0);
+                          const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
                           const model = cModels.find(m => m.id === modelId);
-                          const count = currentCounts[modelId] ?? 0;
+                          const count = currentCounts[modelId] ?? (model?.minCount ?? 0);
                           const effectiveMax = calcCase4ModelMax(model?.maxInRoster, effectiveCMax, cTotal, count);
-                          const clamped = Math.min(effectiveMax, Math.max(0, val));
+                          const clamped = Math.min(effectiveMax, Math.max(model?.minCount ?? 0, val));
                           const newCounts = { ...currentCounts, [modelId]: clamped };
                           // Стоимость пересчитывается по ведущему контейнеру
                           const primaryModelCount = (primaryContainer?.models ?? []).reduce(
@@ -784,7 +784,7 @@ export function RosterDetailPage() {
                           <>
                             {allBoundedContainers.map(container => {
                               const cModels = container.models ?? [];
-                              const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? 0), 0);
+                              const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
                               const cMin = container.minCount;
                               // Эффективный максимум с учётом перекрёстных зависимостей между контейнерами
                               const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
@@ -803,7 +803,7 @@ export function RosterDetailPage() {
                                   </div>
                                   <ul className="unit-nested-models unit-nested-models--roster">
                                     {cModels.map(model => {
-                                      const count = currentCounts[model.id] ?? 0;
+                                      const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                                       // per-N формула для моделей-специалистов; простая ёмкость для базовых
                                       const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
                                       return (
@@ -818,14 +818,14 @@ export function RosterDetailPage() {
                                               type="button"
                                               className="unit-model-count-btn"
                                               onClick={() => handleModelCountChange(container.id, model.id, count - 1)}
-                                              disabled={count <= 0}
+                                              disabled={count <= (model.minCount ?? 0)}
                                               aria-label="Уменьшить количество миниатюр"
                                             >−</button>
                                             <input
                                               type="number"
                                               className="unit-model-count-input"
                                               value={count}
-                                              min={0}
+                                              min={model.minCount ?? 0}
                                               max={effectiveMax}
                                               onChange={e => {
                                                 const v = parseInt(e.target.value, 10);
@@ -878,7 +878,7 @@ export function RosterDetailPage() {
                         const directModelChildren = (primaryUnit.models ?? []).filter(m => m.entryType === 'model' && (m.minCount ?? 0) > 0);
                         const mandatoryCount = directModelChildren.reduce((sum, m) => sum + m.minCount!, 0);
                         const currentCounts = primaryUnit.modelCounts ?? {};
-                        const containerTotal = containerModels.reduce((sum, m) => sum + (currentCounts[m.id] ?? 0), 0);
+                        const containerTotal = containerModels.reduce((sum, m) => sum + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
                         // maxUnitSize = максимальный размер отряда (контейнер + обязательные)
                         const maxUnitSize = maxContainer + mandatoryCount;
                         const minUnitSize = minContainer + mandatoryCount;
@@ -897,9 +897,9 @@ export function RosterDetailPage() {
                         const handleModelCountChange = (modelId: string, val: number) => {
                           const model = containerModels.find(m => m.id === modelId);
                           if (!model) return;
-                          const otherTotal = containerTotal - (currentCounts[modelId] ?? 0);
+                          const otherTotal = containerTotal - (currentCounts[modelId] ?? (model.minCount ?? 0));
                           const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize, minUnitSize);
-                          const clamped = Math.min(effectiveMax, Math.max(0, val));
+                          const clamped = Math.min(effectiveMax, Math.max(model.minCount ?? 0, val));
                           const newCounts = { ...currentCounts, [modelId]: clamped };
                           const newContainerTotal = Object.values(newCounts).reduce((s, v) => s + v, 0);
                           const newTotal = newContainerTotal + mandatoryCount;
@@ -935,7 +935,7 @@ export function RosterDetailPage() {
                             )}
                             <ul className="unit-nested-models unit-nested-models--roster">
                               {sortedContainerModels.map(model => {
-                                const count = currentCounts[model.id] ?? 0;
+                                const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                                 const otherTotal = containerTotal - count;
                                 const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize, minUnitSize);
                                 const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize);
@@ -951,14 +951,14 @@ export function RosterDetailPage() {
                                         type="button"
                                         className="unit-model-count-btn"
                                         onClick={() => handleModelCountChange(model.id, count - 1)}
-                                        disabled={count <= 0}
+                                        disabled={count <= (model.minCount ?? 0)}
                                         aria-label="Уменьшить количество миниатюр"
                                       >−</button>
                                       <input
                                         type="number"
                                         className="unit-model-count-input"
                                         value={count}
-                                        min={0}
+                                        min={model.minCount ?? 0}
                                         max={effectiveMax}
                                         onChange={e => {
                                           const v = parseInt(e.target.value, 10);
@@ -1000,14 +1000,14 @@ export function RosterDetailPage() {
                         const minTotal = multiContainer.minCount ?? 1;
                         const maxTotal = multiContainer.maxCount ?? 99;
                         const currentCounts = primaryUnit.modelCounts ?? {};
-                        const totalCount = containerModels.reduce((sum, m) => sum + (currentCounts[m.id] ?? 0), 0);
+                        const totalCount = containerModels.reduce((sum, m) => sum + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
 
                         const handleModelCountChange = (modelId: string, val: number) => {
                           const model = containerModels.find(m => m.id === modelId);
                           if (!model) return;
-                          const otherTotal = totalCount - (currentCounts[modelId] ?? 0);
+                          const otherTotal = totalCount - (currentCounts[modelId] ?? (model.minCount ?? 0));
                           const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
-                          const clamped = Math.min(effectiveMax, Math.max(0, val));
+                          const clamped = Math.min(effectiveMax, Math.max(model.minCount ?? 0, val));
                           const newCounts = { ...currentCounts, [modelId]: clamped };
                           const newCost = containerModels.reduce((sum, m) => sum + (newCounts[m.id] ?? 0) * (m.cost ?? 0), 0);
                           const updated = unitGroups.map(g => g.id === group.id
@@ -1027,7 +1027,7 @@ export function RosterDetailPage() {
                         return (
                           <ul className="unit-nested-models unit-nested-models--roster">
                             {containerModels.map(model => {
-                              const count = currentCounts[model.id] ?? 0;
+                              const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                               const otherTotal = totalCount - count;
                               const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
                               return (
@@ -1045,14 +1045,14 @@ export function RosterDetailPage() {
                                       type="button"
                                       className="unit-model-count-btn"
                                       onClick={() => handleModelCountChange(model.id, count - 1)}
-                                      disabled={count <= 0}
+                                      disabled={count <= (model.minCount ?? 0)}
                                       aria-label="Уменьшить количество миниатюр"
                                     >−</button>
                                     <input
                                       type="number"
                                       className="unit-model-count-input"
                                       value={count}
-                                      min={0}
+                                      min={model.minCount ?? 0}
                                       max={effectiveMax}
                                       onChange={e => {
                                         const v = parseInt(e.target.value, 10);
