@@ -207,8 +207,18 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
     if (!res.ok) throw new Error('Failed to fetch units');
     const data = await res.json();
 
-    // Собираем корневые отряды: entryType "unit" или "model" без родительского unit-контейнера.
-    // parentId === null означает корневую запись каталога; берём только unit и model-записи.
+    // Собираем отряды уровня «корень фракции»: узлы типа "unit" или "model".
+    // Работает с двумя форматами ответа API:
+    //   — плоский массив: все unit/model имеют parentId === null (текущий формат wh40kcards.ru);
+    //   — древовидный формат: unit/model могут быть вложены внутри контейнерных узлов
+    //     (категорий типа «HQ», «Battleline» и т.д.) — в таком случае parentId указывает на контейнер.
+    //
+    // Алгоритм (без проверки parentId):
+    //   • Узел unit/model → добавляем в результат, НЕ рекурсируем в его children
+    //     (дочерние модели — это состав отряда, не отдельные юниты).
+    //   • Узел-контейнер (нет entryType, есть children) → рекурсируем вглубь с сохранением флага Allied.
+    //   • Узел upgrade и прочие → пропускаем.
+    //
     // insideAllied=true означает, что мы находимся внутри раздела связанного каталога
     // (например «Allied Units» или раздела с catalogueId Unaligned Forces).
     function collectUnits(nodes: ApiUnitItem[], insideAllied = false): ApiUnitItem[] {
@@ -223,14 +233,15 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
           || (!node.entryType && node.name?.toLowerCase().includes('allied'))
           || node.catalogueId === UNALIGNED_FORCES_ID;
 
-        if (node.parentId === null && (node.entryType === 'unit' || node.entryType === 'model')) {
-          // Для unit/model-узла !node.entryType всегда false, поэтому isAlliedSection эквивалентно:
-          // insideAllied || node.catalogueId === UNALIGNED_FORCES_ID
+        if (node.entryType === 'unit' || node.entryType === 'model') {
+          // Отряд или модель — добавляем в результат.
+          // В children находится состав отряда, а не отдельные юниты → не рекурсируем.
           result.push(isAlliedSection ? { ...node, _isAllied: true } : node);
-        }
-        if (Array.isArray(node.children) && node.children.length > 0) {
+        } else if (!node.entryType && Array.isArray(node.children) && node.children.length > 0) {
+          // Контейнерный узел (категория, раздел каталога) — рекурсируем, ища вложенные отряды.
           result.push(...collectUnits(node.children, isAlliedSection));
         }
+        // Узлы типа "upgrade" и прочие пропускаем.
       }
       return result;
     }
