@@ -24,7 +24,8 @@ export interface Faction {
 
 export interface UnitCostBand {
   minModels: number;
-  maxModels: number;
+  // undefined означает «не ограничено сверху» (открытый диапазон, maxModels=null в API)
+  maxModels?: number;
   cost: number;
 }
 

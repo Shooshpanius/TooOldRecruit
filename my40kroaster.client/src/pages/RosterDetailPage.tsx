@@ -11,7 +11,8 @@ import { UNALIGNED_FORCES_ID } from '../services/api';
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
 
 function getCostForModelCount(bands: UnitCostBand[], count: number): number {
-  const band = bands.find(b => count >= b.minModels && count <= b.maxModels);
+  // undefined maxModels означает «не ограничено сверху» (открытый диапазон)
+  const band = bands.find(b => count >= b.minModels && count <= (b.maxModels ?? Infinity));
   return band?.cost ?? bands[0].cost;
 }
 
@@ -27,10 +28,69 @@ function findMultiModelContainer(models?: Unit[]): Unit | undefined {
   return undefined;
 }
 
+// Возвращает ВСЕ ограниченные контейнеры (min/max) из прямых дочерних узлов юнита.
+// Используется для Case 4 — юниты с несколькими независимыми контейнерами (Inquisitorial Agents).
+function findAllMultiModelContainers(models?: Unit[]): Unit[] {
+  if (!models) return [];
+  return models.filter(
+    m => m.entryType === undefined && m.models && m.models.length > 0 &&
+      (m.minCount !== undefined || m.maxCount !== undefined)
+  );
+}
+
 // Наибольший общий делитель (алгоритм Евклида)
 function gcd(a: number, b: number): number {
   while (b !== 0) { const temp = b; b = a % b; a = temp; }
   return a;
+}
+
+// Вычисляет эффективный максимум контейнера с учётом перекрёстных ограничений (Case 4).
+// Если в юните есть «ведущий» контейнер с бо́льшим maxCount и отношение ratio = bigMax/smallMax —
+// целое число > 1, то максимум = floor(totalОтВедущегоКонтейнера / ratio).
+// Пример: Gun Servitors (max=2) при Acolytes (max=10): ratio=5 → max=floor(acolytesTotal/5).
+function calcCase4ContainerMax(container: Unit, allContainers: Unit[], counts: Record<string, number>): number {
+  const cMax = container.maxCount;
+  if (cMax === undefined) return 99;
+  for (const other of allContainers) {
+    if (other.id === container.id) continue;
+    const otherMax = other.maxCount;
+    if (otherMax === undefined || otherMax <= cMax) continue;
+    const ratio = otherMax / cMax;
+    if (Number.isInteger(ratio) && ratio > 1) {
+      const otherTotal = (other.models ?? []).reduce((s, m) => s + (counts[m.id] ?? 0), 0);
+      return Math.floor(otherTotal / ratio);
+    }
+  }
+  return cMax;
+}
+
+// Вычисляет эффективный максимум модели внутри контейнера (Case 4).
+// Если maxInRoster < effectiveCMax и НОД > 1 — правило «perCount на каждые perN».
+// Иначе — простое ограничение по оставшейся ёмкости: min(maxInRoster, effectiveCMax − others).
+// Math.max(0, ...) гарантирует неотрицательный результат при переполнении контейнера.
+function calcCase4ModelMax(modelMaxInRoster: number | undefined, effectiveCMax: number, cTotal: number, count: number): number {
+  const maxPerModel = modelMaxInRoster ?? effectiveCMax;
+  const otherInContainer = cTotal - count;
+  if (maxPerModel < effectiveCMax) {
+    const g = gcd(maxPerModel, effectiveCMax);
+    if (g > 1 && g < effectiveCMax) {
+      const perN = effectiveCMax / g;
+      const perCount = maxPerModel / g;
+      const byRatio = Math.min(Math.floor(cTotal / perN) * perCount, maxPerModel);
+      return Math.max(0, Math.min(byRatio, effectiveCMax - otherInContainer));
+    }
+  }
+  return Math.max(0, Math.min(maxPerModel, effectiveCMax - otherInContainer));
+}
+
+// Возвращает «ведущий» контейнер — с наибольшим maxCount.
+// Для Case 4: стоимость отряда считается по ведущему контейнеру (Acolytes, не Servitors),
+// так как costBands калиброваны по числу агентов (5–10), а не по суммарному размеру отряда.
+function findCase4PrimaryContainer(allContainers: Unit[]): Unit | undefined {
+  return allContainers.reduce<Unit | undefined>((best, c) => {
+    const bestMax = best?.maxCount ?? -1;
+    return (c.maxCount ?? -1) > bestMax ? c : best;
+  }, undefined);
 }
 
 // Определяет, является ли модель «только при минимальном размере отряда».
@@ -88,6 +148,122 @@ function calcEffectiveMax(
   return Math.min(modelMaxInRoster ?? maxTotal, maxTotal - otherTotal);
 }
 
+// Рекурсивно считает сумму счётчиков всех [M]-узлов в дереве (включая вложенные контейнеры).
+// Для моделей без явной записи в counts берём minCount ?? 0 (согласованно с ownCount в контролах).
+function countAllModels(models: Unit[], counts: Record<string, number>): number {
+  return models.reduce((sum, m) => {
+    if (m.entryType === 'model') return sum + (counts[m.id] ?? m.minCount ?? 0);
+    if (m.models) return sum + countAllModels(m.models, counts);
+    return sum;
+  }, 0);
+}
+
+// Интерактивный рендер состава отряда с фиксированной стоимостью.
+// Отображает иерархию моделей с кнопками +/− для выбора опциональных миниатюр.
+//   - Фиксированные модели (minCount === maxInRoster > 0) → метка «×N (обязательно)», без контролов
+//   - Опциональные/переменные модели → кнопки +/−, максимум ограничен лимитом контейнера
+//   - Контейнеры («9 Exaction Vigilants», «Up to 2:») → заголовок с счётчиком N/max
+function renderFixedCompositionControls(
+  models: Unit[],
+  counts: Record<string, number>,
+  onCountChange: (modelId: string, newVal: number) => void,
+  parentMaxCount?: number,
+): React.ReactNode {
+  const containerTotal = countAllModels(models, counts);
+  return models.map(model => {
+    if (model.entryType === undefined && model.models && model.models.length > 0) {
+      const subContainerTotal = countAllModels(model.models, counts);
+      // Показываем диапазон «min–max» если min ≠ max, иначе просто max
+      const rangeStr = model.maxCount !== undefined
+        ? (model.minCount !== undefined && model.minCount !== model.maxCount
+            ? `${model.minCount}–${model.maxCount}`
+            : String(model.maxCount))
+        : undefined;
+      const isBelowMin = model.minCount !== undefined && subContainerTotal < model.minCount;
+      return (
+        <li key={model.id} className="unit-nested-model-item unit-nested-model-item--group">
+          <span className="unit-nested-model-name">{model.name}</span>
+          {rangeStr !== undefined && (
+            <span className={`unit-model-count-label${isBelowMin ? ' unit-model-count-label--error' : ''}`}>
+              {subContainerTotal}/{rangeStr}
+            </span>
+          )}
+          <ul className="unit-nested-models">
+            {renderFixedCompositionControls(model.models, counts, onCountChange, model.maxCount)}
+            {isBelowMin && (
+              <li className="unit-model-count-hint unit-model-count-hint--error">
+                Необходимо не менее {model.minCount} (выбрано: {subContainerTotal})
+              </li>
+            )}
+          </ul>
+        </li>
+      );
+    }
+    // Фиксированная модель (minCount === maxInRoster > 0) — без контролов
+    const isFixed = model.minCount !== undefined && model.minCount > 0
+      && model.minCount === model.maxInRoster;
+    if (isFixed) {
+      return (
+        <li key={model.id} className="unit-nested-model-item">
+          <span className="unit-nested-model-name">
+            {model.name}
+            {model.entryType === 'model' && <span className="unit-type-badge">[M]</span>}
+          </span>
+          <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+        </li>
+      );
+    }
+    const minCount = model.minCount ?? 0;
+    const maxPerModel = model.maxInRoster ?? 0;
+    const ownCount = counts[model.id] ?? minCount;
+    const otherInContainer = containerTotal - ownCount;
+    const effectiveMax = parentMaxCount !== undefined
+      ? Math.min(maxPerModel, parentMaxCount - otherInContainer)
+      : maxPerModel;
+    const effectiveCap = Math.max(effectiveMax, minCount);
+    const setCount = (val: number) => {
+      onCountChange(model.id, Math.max(minCount, Math.min(val, effectiveCap)));
+    };
+    return (
+      <li key={model.id} className="unit-nested-model-item">
+        <span className="unit-nested-model-name">
+          {model.name}
+          {model.entryType === 'model' && <span className="unit-type-badge">[M]</span>}
+        </span>
+        <div className="unit-model-count">
+          <span className="unit-model-count-label">Миниатюр:</span>
+          <button
+            type="button"
+            className="unit-model-count-btn"
+            onClick={() => setCount(ownCount - 1)}
+            disabled={ownCount <= minCount}
+            aria-label="Уменьшить количество миниатюр"
+          >−</button>
+          <input
+            type="number"
+            className="unit-model-count-input"
+            value={ownCount}
+            min={minCount}
+            max={effectiveCap}
+            onChange={e => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v)) setCount(v);
+            }}
+            aria-label="Количество миниатюр"
+          />
+          <button
+            type="button"
+            className="unit-model-count-btn"
+            onClick={() => setCount(ownCount + 1)}
+            disabled={ownCount >= effectiveCap}
+            aria-label="Увеличить количество миниатюр"
+          >+</button>
+        </div>
+      </li>
+    );
+  });
+}
+
 function renderRosterModels(
   models: Unit[],
   parentCostBands?: UnitCostBand[],
@@ -113,10 +289,12 @@ function renderRosterModels(
       : undefined;
     const hasBands = !!(effectiveBands && (
       effectiveBands.length > 1 ||
-      (effectiveBands[0]?.minModels ?? 0) < (effectiveBands[0]?.maxModels ?? 0)
+      (effectiveBands[0]?.minModels ?? 0) < (effectiveBands[0]?.maxModels ?? Infinity)
     ));
     const minM = hasBands ? (effectiveBands?.[0].minModels ?? 0) : 0;
-    const maxM = hasBands ? (effectiveBands?.[effectiveBands.length - 1].maxModels ?? 0) : 0;
+    // undefined maxModels в последнем диапазоне означает «не ограничено сверху»;
+    // используем maxInRoster модели как фактический верхний предел для UI-контрола
+    const maxM = hasBands ? (effectiveBands?.[effectiveBands.length - 1].maxModels ?? model.maxInRoster ?? 99) : 0;
     // Текущий count берётся из primaryUnit.modelCount (хранится на уровне [U])
     const currentCount = hasBands ? (parentModelCount ?? minM) : undefined;
     return (
@@ -362,10 +540,11 @@ export function RosterDetailPage() {
                           )}
                         </div>
                         {primaryUnit.entryType === 'model' && primaryUnit.costBands &&
-                          (primaryUnit.costBands.length > 1 || (primaryUnit.costBands[0]?.minModels ?? 0) < (primaryUnit.costBands[0]?.maxModels ?? 0)) && (() => {
+                          (primaryUnit.costBands.length > 1 || (primaryUnit.costBands[0]?.minModels ?? 0) < (primaryUnit.costBands[0]?.maxModels ?? Infinity)) && (() => {
                           const bands = primaryUnit.costBands!;
                           const minM = bands[0].minModels;
-                          const maxM = bands[bands.length - 1].maxModels;
+                          // undefined maxModels в последнем диапазоне означает «не ограничено сверху»
+                          const maxM = bands[bands.length - 1].maxModels ?? primaryUnit.maxInRoster ?? 99;
                           const currentCount = primaryUnit.modelCount ?? minM;
                           const setCount = (val: number) => {
                             const clamped = Math.min(maxM, Math.max(minM, val));
@@ -469,10 +648,11 @@ export function RosterDetailPage() {
                         {group.units.slice(1).map((unit) => {
                           // Контролы только для присоединённых [M] с диапазонами стоимости
                           const hasBands = unit.entryType === 'model' && !!(unit.costBands && unit.costBands.length >= 1 &&
-                            (unit.costBands.length > 1 || (unit.costBands[0]?.minModels ?? 0) < (unit.costBands[0]?.maxModels ?? 0)));
+                            (unit.costBands.length > 1 || (unit.costBands[0]?.minModels ?? 0) < (unit.costBands[0]?.maxModels ?? Infinity)));
                           const bands = hasBands ? unit.costBands! : null;
                           const minM = bands ? bands[0].minModels : 1;
-                          const maxM = bands ? bands[bands.length - 1].maxModels : 1;
+                          // undefined maxModels в последнем диапазоне означает «не ограничено сверху»
+                          const maxM = bands ? (bands[bands.length - 1].maxModels ?? unit.maxInRoster ?? 99) : 1;
                           const currentCount = unit.modelCount ?? minM;
                           const setAttachedCount = (val: number) => {
                             const clamped = Math.min(maxM, Math.max(minM, val));
@@ -552,6 +732,135 @@ export function RosterDetailPage() {
                     )}
                     {primaryUnit.entryType === 'unit' && primaryUnit.models && primaryUnit.models.length > 0 && (() => {
                       const multiContainerForAll = findMultiModelContainer(primaryUnit.models);
+
+                      // Случай 4: юнит с несколькими независимыми контейнерами и переменной стоимостью по costBands.
+                      // Пример: Inquisitorial Agents — «1-2 Gun Servitors» + «5-10 Acolytes».
+                      const allBoundedContainers = primaryUnit.costBands?.length
+                        ? findAllMultiModelContainers(primaryUnit.models)
+                        : [];
+
+                      if (allBoundedContainers.length >= 2) {
+                        const bands = primaryUnit.costBands!;
+                        const currentCounts = primaryUnit.modelCounts ?? {};
+                        const totalCount = allBoundedContainers.reduce(
+                          (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (currentCounts[m.id] ?? 0), 0),
+                          0
+                        );
+                        // Стоимость считается по «ведущему» контейнеру (Acolytes, а не Servitors)
+                        const primaryContainer = findCase4PrimaryContainer(allBoundedContainers);
+
+                        const handleModelCountChange = (containerId: string, modelId: string, val: number) => {
+                          const container = allBoundedContainers.find(c => c.id === containerId);
+                          if (!container) return;
+                          const cModels = container.models ?? [];
+                          // Эффективный максимум контейнера с учётом перекрёстных ограничений
+                          const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
+                          const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? 0), 0);
+                          const model = cModels.find(m => m.id === modelId);
+                          const count = currentCounts[modelId] ?? 0;
+                          const effectiveMax = calcCase4ModelMax(model?.maxInRoster, effectiveCMax, cTotal, count);
+                          const clamped = Math.min(effectiveMax, Math.max(0, val));
+                          const newCounts = { ...currentCounts, [modelId]: clamped };
+                          // Стоимость пересчитывается по ведущему контейнеру
+                          const primaryModelCount = (primaryContainer?.models ?? []).reduce(
+                            (s, m) => s + (newCounts[m.id] ?? 0), 0
+                          );
+                          const newCost = getCostForModelCount(bands, primaryModelCount);
+                          const updated = unitGroups.map(g => g.id === group.id
+                            ? {
+                                ...g,
+                                units: g.units.map((u, idx) => idx === 0
+                                  ? { ...u, modelCounts: newCounts, modelCount: primaryModelCount, cost: newCost }
+                                  : u
+                                )
+                              }
+                            : g
+                          );
+                          setUnitGroups(updated);
+                          persistUnits(updated);
+                        };
+
+                        return (
+                          <>
+                            {allBoundedContainers.map(container => {
+                              const cModels = container.models ?? [];
+                              const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? 0), 0);
+                              const cMin = container.minCount;
+                              // Эффективный максимум с учётом перекрёстных зависимостей между контейнерами
+                              const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
+                              const isBelowMin = cMin !== undefined && cTotal < cMin;
+                              const isAboveMax = cTotal > effectiveCMax;
+                              const rangeStr = cMin !== undefined && cMin !== effectiveCMax
+                                ? `${cMin}–${effectiveCMax}`
+                                : String(effectiveCMax);
+                              return (
+                                <div key={container.id} className="unit-container-section">
+                                  <div className="unit-container-section-header">
+                                    <span className="unit-container-section-name">{container.name}</span>
+                                    <span className={`unit-model-count-label${(isBelowMin || isAboveMax) ? ' unit-model-count-label--error' : ''}`}>
+                                      {cTotal}/{rangeStr}
+                                    </span>
+                                  </div>
+                                  <ul className="unit-nested-models unit-nested-models--roster">
+                                    {cModels.map(model => {
+                                      const count = currentCounts[model.id] ?? 0;
+                                      // per-N формула для моделей-специалистов; простая ёмкость для базовых
+                                      const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
+                                      return (
+                                        <li key={model.id} className="unit-nested-model-item">
+                                          <span className="unit-nested-model-name">
+                                            {model.name}
+                                            <span className="unit-type-badge">[M]</span>
+                                          </span>
+                                          <div className="unit-model-count">
+                                            <span className="unit-model-count-label">Миниатюр:</span>
+                                            <button
+                                              type="button"
+                                              className="unit-model-count-btn"
+                                              onClick={() => handleModelCountChange(container.id, model.id, count - 1)}
+                                              disabled={count <= 0}
+                                              aria-label="Уменьшить количество миниатюр"
+                                            >−</button>
+                                            <input
+                                              type="number"
+                                              className="unit-model-count-input"
+                                              value={count}
+                                              min={0}
+                                              max={effectiveMax}
+                                              onChange={e => {
+                                                const v = parseInt(e.target.value, 10);
+                                                if (!isNaN(v)) handleModelCountChange(container.id, model.id, v);
+                                              }}
+                                              aria-label="Количество миниатюр"
+                                            />
+                                            <button
+                                              type="button"
+                                              className="unit-model-count-btn"
+                                              onClick={() => handleModelCountChange(container.id, model.id, count + 1)}
+                                              disabled={count >= effectiveMax}
+                                              aria-label="Увеличить количество миниатюр"
+                                            >+</button>
+                                          </div>
+                                        </li>
+                                      );
+                                    })}
+                                    {(isBelowMin || isAboveMax) && (
+                                      <li className="unit-model-count-hint unit-model-count-hint--error">
+                                        {isAboveMax
+                                          ? `Максимум ${effectiveCMax} (выбрано: ${cTotal})`
+                                          : `Необходимо не менее ${cMin} (выбрано: ${cTotal})`}
+                                      </li>
+                                    )}
+                                  </ul>
+                                </div>
+                              );
+                            })}
+                            <div className="unit-model-count-hint unit-model-count-hint--total">
+                              Итого: {totalCount}
+                            </div>
+                          </>
+                        );
+                      }
 
                       // Случай 3: Blightlord/Deathshroud-подобный — один или несколько типов моделей + costBands на [U]
                       // Стоимость определяется по суммарному числу моделей через costBands
@@ -676,8 +985,11 @@ export function RosterDetailPage() {
                       }
 
                       // Случай 1: отряд с несколькими типами моделей (Ironstrider-подобная структура)
-                      // Если у [U] есть собственные costBands (Poxwalkers-подобный), пропускаем этот случай
-                      const multiContainer = !primaryUnit.costBands?.length
+                      // Если у [U] есть собственные costBands (Poxwalkers-подобный), пропускаем этот случай.
+                      // Если модели в контейнере не имеют индивидуальных стоимостей, пропускаем этот случай —
+                      // отряды с фиксированным составом рендерятся как стандартные (Exaction Squad и т.п.).
+                      const containerHasCosts = (multiContainerForAll?.models ?? []).some(m => (m.cost ?? 0) > 0);
+                      const multiContainer = !primaryUnit.costBands?.length && containerHasCosts
                         ? multiContainerForAll
                         : undefined;
                       if (multiContainer) {
@@ -769,8 +1081,41 @@ export function RosterDetailPage() {
                       // Передаём costBands и callback в renderRosterModels,
                       // чтобы дочерние [M] могли показать контролы и обновить modelCount у [U]
                       const bands = primaryUnit.costBands;
+                      // Для юнитов с фиксированным составом и единой стоимостью (без переменных costBands)
+                      // показываем интерактивные контролы для выбора опциональных миниатюр (Exaction Squad и т.п.)
+                      if (!bands) {
+                        const currentCounts = primaryUnit.modelCounts ?? {};
+                        const handleCompositionCountChange = (modelId: string, val: number) => {
+                          const newCounts = { ...currentCounts, [modelId]: val };
+                          // Стоимость отряда не меняется — обновляем только modelCounts
+                          const updated = unitGroups.map(g => g.id === group.id
+                            ? {
+                                ...g,
+                                units: g.units.map((u, idx) => idx === 0
+                                  ? { ...u, modelCounts: newCounts }
+                                  : u
+                                )
+                              }
+                            : g
+                          );
+                          setUnitGroups(updated);
+                          persistUnits(updated);
+                        };
+                        return (
+                          <ul className="unit-nested-models unit-nested-models--roster">
+                            {renderFixedCompositionControls(
+                              primaryUnit.models ?? [],
+                              currentCounts,
+                              handleCompositionCountChange,
+                            )}
+                          </ul>
+                        );
+                      }
                       const minM = bands?.[0].minModels ?? 0;
-                      const maxM = bands ? bands[bands.length - 1].maxModels : 0;
+                      // undefined maxModels в последнем диапазоне означает «не ограничено сверху»;
+                      // используем maxInRoster первой дочерней модели как фактический верхний предел
+                      const firstChildModel = (primaryUnit.models ?? []).find(m => m.entryType === 'model');
+                      const maxM = bands ? (bands[bands.length - 1].maxModels ?? firstChildModel?.maxInRoster ?? 99) : 0;
                       const currentCount = primaryUnit.modelCount ?? minM;
                       const handleCountChange = bands ? (val: number) => {
                         const clamped = Math.min(maxM, Math.max(minM, val));
