@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRosters } from '../contexts/RosterContext';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import type { Roster } from '../types';
+import { LAST_PR_NUMBER, LAST_PR_DATE } from '../version';
 
 export function HomePage() {
   const { user, signOut } = useAuth();
@@ -26,6 +27,7 @@ export function HomePage() {
       <header className="app-header">
         <h1>⚔️ Too Old Recruit ⚔️</h1>
         <p className="subtitle">Warhammer 40,000 — 10-я редакция</p>
+        <p className="version-badge">Beta version #0.0.{LAST_PR_NUMBER} от {LAST_PR_DATE}</p>
         {user ? (
           <div className="user-info">
             {user.picture && <img src={user.picture} alt={user.name} className="avatar" />}
