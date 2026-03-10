@@ -514,7 +514,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
             >+</button>
           </div>
         )}
-        {!isNested && unit.entryType === 'unit' && unit.models && unit.models.length > 0 && (
+        {/* Список моделей показываем только для юнитов с переменной стоимостью (Poxwalkers и т.п.),
+            где у дочерних [M] есть costBands. Для юнитов с фиксированным составом и единой ценой
+            (Exaction Squad и т.п.) иерархия состава не нужна и только запутывает пользователя. */}
+        {!isNested && unit.entryType === 'unit' && unit.models && unit.models.length > 0 &&
+          (unit.costBands?.length || findChildModelWithBands(unit.models) !== undefined) && (
           <ul className="unit-nested-models">
             {unit.models.map(child => renderUnitItem(child, depth + 1))}
           </ul>

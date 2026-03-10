@@ -777,6 +777,10 @@ export function RosterDetailPage() {
                       // Передаём costBands и callback в renderRosterModels,
                       // чтобы дочерние [M] могли показать контролы и обновить modelCount у [U]
                       const bands = primaryUnit.costBands;
+                      // Для юнитов с фиксированным составом и единой стоимостью (без переменных costBands)
+                      // не отображаем детализацию состава — интерактивных контролов нет,
+                      // а иерархия «9 Exaction Vigilants / Up to 2:» только запутывает пользователя.
+                      if (!bands) return null;
                       const minM = bands?.[0].minModels ?? 0;
                       // undefined maxModels в последнем диапазоне означает «не ограничено сверху»;
                       // используем maxInRoster первой дочерней модели как фактический верхний предел
