@@ -98,7 +98,7 @@ function findCase4PrimaryContainer(allContainers: Unit[]): Unit | undefined {
 // Пример: plague spewer+CCW (maxInRoster=1) — ровно 1 в отряде, доступна только при мин-размере.
 // Модели с maxInRoster>1 и НОД>1 подпадают под «perCount на каждые perModels» (не мин-размер).
 // Модели с maxInRoster>1 и НОД=1 (например combi-bolter, maxInRoster=9) — обычный абсолютный лимит.
-function isMinSizeOnlyModel(modelMaxInRoster: number | undefined, _maxUnitSize: number): boolean {
+function isMinSizeOnlyModel(modelMaxInRoster: number | undefined): boolean {
   return modelMaxInRoster === 1;
 }
 
@@ -106,7 +106,7 @@ function isMinSizeOnlyModel(modelMaxInRoster: number | undefined, _maxUnitSize: 
 // Ведущие модели отображаются вверху списка.
 // Модели с НОД=1 (combi-bolter, plague spewer) — ведущие.
 // Модели с НОД>1 (flail "1 на 5", combi-weapon "3 на 5") — зависимые (secondary).
-function isPrimaryContainerModel(modelMaxInRoster: number | undefined, maxUnitSize: number, _minUnitSize?: number): boolean {
+function isPrimaryContainerModel(modelMaxInRoster: number | undefined, maxUnitSize: number): boolean {
   if (modelMaxInRoster === undefined) return true;
   // Зависимые только когда НОД > 1 (есть групповое ограничение)
   return gcd(modelMaxInRoster, maxUnitSize) === 1;
@@ -866,7 +866,10 @@ export function RosterDetailPage() {
                       // Стоимость определяется по суммарному числу моделей через costBands
                       // Отличие от Poxwalkers (Case 2): контейнерный узел имеет явное ограничение maxCount (а не только minCount)
                       // Поддерживает как несколько типов моделей (Blightlord), так и один тип (Deathshroud Terminators)
-                      if (multiContainerForAll && multiContainerForAll.maxCount !== undefined && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1) {
+                      // Не применяется, если контейнер содержит вложенные контейнеры вместо прямых [M]-узлов
+                      // (пример: Fortis Kill Team — «Squad Members» содержит «Additional» и «Core» как субконтейнеры).
+                      const containerHasOnlyDirectModels = (multiContainerForAll?.models ?? []).every(m => m.entryType === 'model');
+                      if (multiContainerForAll && multiContainerForAll.maxCount !== undefined && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1 && containerHasOnlyDirectModels) {
                         const containerModels = multiContainerForAll.models ?? [];
                         const minContainer = multiContainerForAll.minCount ?? 1;
                         const maxContainer = multiContainerForAll.maxCount ?? 99;
@@ -882,13 +885,13 @@ export function RosterDetailPage() {
                         // Если выбрана модель «только при минимальном размере» (plague spewer+CCW) —
                         // контейнер жёстко ограничен минимальным размером: не более minContainer моделей.
                         const isMinSizeOnlySelected = containerModels.some(
-                          m => isMinSizeOnlyModel(m.maxInRoster, maxUnitSize) && (currentCounts[m.id] ?? 0) > 0
+                          m => isMinSizeOnlyModel(m.maxInRoster) && (currentCounts[m.id] ?? 0) > 0
                         );
                         const effectiveMaxContainer = isMinSizeOnlySelected ? minContainer : maxContainer;
                         // Ведущие модели (не зависят от числа других) — вверх списка
                         const sortedContainerModels = [
-                          ...containerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize, minUnitSize)),
-                          ...containerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize, minUnitSize)),
+                          ...containerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
+                          ...containerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
                         ];
 
                         const handleModelCountChange = (modelId: string, val: number) => {
@@ -935,7 +938,7 @@ export function RosterDetailPage() {
                                 const count = currentCounts[model.id] ?? 0;
                                 const otherTotal = containerTotal - count;
                                 const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize, minUnitSize);
-                                const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize, minUnitSize);
+                                const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize);
                                 return (
                                   <li key={model.id} className={`unit-nested-model-item${isPrimary ? ' unit-nested-model-item--primary' : ''}`}>
                                     <span className="unit-nested-model-name">
