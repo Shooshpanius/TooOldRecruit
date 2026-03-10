@@ -405,17 +405,17 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
     if (allBoundedContainers.length >= 2) {
       // Суммарное количество по всем контейнерам → определяет стоимость через costBands
       const totalCount = allBoundedContainers.reduce(
-        (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (modelCounts[m.id] ?? 0), 0),
+        (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0),
         0
       );
       // Стоимость считается по «ведущему» контейнеру (наибольший maxCount = Acolytes),
       // т.к. costBands калиброваны под число агентов (5–10), а не суммарный размер с сервиторами.
       const primaryContainer = findCase4PrimaryContainer(allBoundedContainers);
-      const primaryModelCount = (primaryContainer?.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? 0), 0);
+      const primaryModelCount = (primaryContainer?.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
       const cost = getCostForModelCount(unit.costBands!, primaryModelCount);
       // Все контейнеры должны удовлетворять своим ограничениям с учётом перекрёстных зависимостей
       const containersValid = allBoundedContainers.every(c => {
-        const cTotal = (c.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? 0), 0);
+        const cTotal = (c.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
         const effectiveCMax = calcCase4ContainerMax(c, allBoundedContainers, modelCounts);
         return (c.minCount === undefined || cTotal >= c.minCount) && cTotal <= effectiveCMax;
       });
@@ -444,7 +444,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   ...unit,
                   cost,
                   modelCounts: Object.fromEntries(
-                    allBoundedContainers.flatMap(c => (c.models ?? []).map(m => [m.id, modelCounts[m.id] ?? 0]))
+                    allBoundedContainers.flatMap(c => (c.models ?? []).map(m => [m.id, modelCounts[m.id] ?? (m.minCount ?? 0)]))
                   ),
                   modelCount: primaryModelCount,
                 })}
@@ -457,7 +457,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
           </div>
           {allBoundedContainers.map(container => {
             const cModels = container.models ?? [];
-            const cTotal = cModels.reduce((s, m) => s + (modelCounts[m.id] ?? 0), 0);
+            const cTotal = cModels.reduce((s, m) => s + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
             const cMin = container.minCount;
             // Эффективный максимум с учётом перекрёстных ограничений между контейнерами
             const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, modelCounts);
@@ -477,7 +477,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                 </div>
                 <ul className="unit-nested-models">
                   {cModels.map(model => {
-                    const count = modelCounts[model.id] ?? 0;
+                    const count = modelCounts[model.id] ?? (model.minCount ?? 0);
                     // per-N формула для моделей-специалистов; простая ёмкость для базовых моделей
                     const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
                     return (
@@ -491,19 +491,19 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                           <button
                             type="button"
                             className="unit-model-count-btn"
-                            onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: Math.max(0, count - 1) }))}
-                            disabled={count <= 0}
+                            onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: Math.max(model.minCount ?? 0, count - 1) }))}
+                            disabled={count <= (model.minCount ?? 0)}
                             aria-label="Уменьшить количество миниатюр"
                           >−</button>
                           <input
                             type="number"
                             className="unit-model-count-input"
                             value={count}
-                            min={0}
+                            min={model.minCount ?? 0}
                             max={effectiveMax}
                             onChange={e => {
                               const v = parseInt(e.target.value, 10);
-                              if (!isNaN(v)) setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(0, v)) }));
+                              if (!isNaN(v)) setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(model.minCount ?? 0, v)) }));
                             }}
                             aria-label="Количество миниатюр"
                           />
@@ -550,7 +550,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       // Прямые дочерние модели юнита с minCount > 0 — обязательные (например, Blightlord Champion)
       const directModelChildren = (unit.models ?? []).filter(m => m.entryType === 'model' && (m.minCount ?? 0) > 0);
       const mandatoryCount = directModelChildren.reduce((sum, m) => sum + m.minCount!, 0);
-      const containerTotal = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? 0), 0);
+      const containerTotal = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
       const totalCount = containerTotal + mandatoryCount;
       const cost = getCostForModelCount(unit.costBands, totalCount);
       // maxUnitSize = максимальный размер отряда (контейнер + обязательные)
@@ -592,7 +592,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                 onClick={() => onAdd({
                   ...unit,
                   cost,
-                  modelCounts: Object.fromEntries(containerModels.map(m => [m.id, modelCounts[m.id] ?? 0])),
+                  modelCounts: Object.fromEntries(containerModels.map(m => [m.id, modelCounts[m.id] ?? (m.minCount ?? 0)])),
                   modelCount: totalCount,
                 })}
                 disabled={!canAdd || limitReached}
@@ -617,7 +617,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
           )}
           <ul className="unit-nested-models">
             {sortedContainerModels.map(model => {
-              const count = modelCounts[model.id] ?? 0;
+              const count = modelCounts[model.id] ?? (model.minCount ?? 0);
               const otherTotal = containerTotal - count;
               const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, totalCount, maxUnitSize, minUnitSize);
               const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize);
@@ -632,20 +632,20 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                     <button
                       type="button"
                       className="unit-model-count-btn"
-                      onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: count - 1 }))}
-                      disabled={count <= 0}
+                      onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: Math.max(model.minCount ?? 0, count - 1) }))}
+                      disabled={count <= (model.minCount ?? 0)}
                       aria-label="Уменьшить количество миниатюр"
                     >−</button>
                     <input
                       type="number"
                       className="unit-model-count-input"
                       value={count}
-                      min={0}
+                      min={model.minCount ?? 0}
                       max={effectiveMax}
                       onChange={e => {
                         const v = parseInt(e.target.value, 10);
                         if (!isNaN(v)) {
-                          setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(0, v)) }));
+                          setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(model.minCount ?? 0, v)) }));
                         }
                       }}
                       aria-label="Количество миниатюр"
@@ -683,8 +683,8 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       const containerModels = multiContainer.models ?? [];
       const minTotal = multiContainer.minCount ?? 1;
       const maxTotal = multiContainer.maxCount ?? 99;
-      const totalCount = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? 0), 0);
-      const computedCost = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? 0) * (m.cost ?? 0), 0);
+      const totalCount = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
+      const computedCost = containerModels.reduce((sum, m) => sum + (modelCounts[m.id] ?? (m.minCount ?? 0)) * (m.cost ?? 0), 0);
       const isValidTotal = totalCount >= minTotal && totalCount <= maxTotal;
       const canAdd = isValidTotal && (remainingPoints === undefined || computedCost <= remainingPoints);
       const inRoster = countInRoster(unit.id);
@@ -710,7 +710,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                 onClick={() => onAdd({
                   ...unit,
                   cost: computedCost,
-                  modelCounts: Object.fromEntries(containerModels.map(m => [m.id, modelCounts[m.id] ?? 0])),
+                  modelCounts: Object.fromEntries(containerModels.map(m => [m.id, modelCounts[m.id] ?? (m.minCount ?? 0)])),
                 })}
                 disabled={!canAdd || limitReached}
                 aria-label={attachMode ? 'Присоединить' : 'Добавить'}
@@ -721,7 +721,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
           </div>
           <ul className="unit-nested-models">
             {containerModels.map(model => {
-              const count = modelCounts[model.id] ?? 0;
+              const count = modelCounts[model.id] ?? (model.minCount ?? 0);
               const otherTotal = totalCount - count;
               const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
               return (
@@ -738,20 +738,20 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                     <button
                       type="button"
                       className="unit-model-count-btn"
-                      onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: count - 1 }))}
-                      disabled={count <= 0}
+                      onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: Math.max(model.minCount ?? 0, count - 1) }))}
+                      disabled={count <= (model.minCount ?? 0)}
                       aria-label="Уменьшить количество миниатюр"
                     >−</button>
                     <input
                       type="number"
                       className="unit-model-count-input"
                       value={count}
-                      min={0}
+                      min={model.minCount ?? 0}
                       max={effectiveMax}
                       onChange={e => {
                         const v = parseInt(e.target.value, 10);
                         if (!isNaN(v)) {
-                          setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(0, v)) }));
+                          setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(model.minCount ?? 0, v)) }));
                         }
                       }}
                       aria-label="Количество миниатюр"
