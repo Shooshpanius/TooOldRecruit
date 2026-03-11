@@ -203,7 +203,9 @@ const DEFAULT_UNITS: Unit[] = [
 
 // Карта взаимоисключающих групп по id контейнера.
 // Ключ — id контейнера, значение — массив групп (каждая группа = список id моделей, из которых можно выбрать максимум одну).
-// Необходимо, т.к. API (wh40kcards.ru) не сохраняет структуру selectionEntryGroup из BSData.
+// API (wh40kcards.ru) теперь возвращает selectionEntryGroup-узлы, однако взаимоисключающие ограничения
+// (data-tether XOR omnispex) по-прежнему не кодируются отдельной группой — оба имеют maxInRoster=1 без
+// общего родительского selectionEntryGroup с maxSelections=1.
 // При обновлении данных игры — искать в BSData узлы типа selectionEntryGroup с maxSelections=1,
 // извлекать их id дочерних моделей и добавлять соответствующую запись сюда.
 const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
@@ -216,6 +218,16 @@ const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
   // Secutarii Peltasts [Legends]
   '347a-c7c2-1bc8-db33': [['efff-ac31-c7a5-93c6', 'fec1-2c41-7ea4-480e']],
 };
+
+// Возвращает true, если узел является промежуточным контейнером (не unit/model/upgrade).
+// API wh40kcards.ru исторически использовал entryType=null, а после обновления — entryType="selectionEntryGroup".
+// Оба варианта нужно обрабатывать одинаково: рекурсировать вглубь дочерних узлов.
+function isContainerItem(item: ApiUnitItem): boolean {
+  return (!item.entryType || item.entryType === 'selectionEntryGroup')
+    && item.children != null
+    && Array.isArray(item.children)
+    && item.children.length > 0;
+}
 
 export async function getUnits(factionId: string): Promise<Unit[]> {
   try {
@@ -232,7 +244,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
     // Алгоритм (без проверки parentId):
     //   • Узел unit/model → добавляем в результат, НЕ рекурсируем в его children
     //     (дочерние модели — это состав отряда, не отдельные юниты).
-    //   • Узел-контейнер (нет entryType, есть children) → рекурсируем вглубь с сохранением флага Allied.
+    //   • Узел-контейнер (entryType=null или "selectionEntryGroup", есть children) → рекурсируем.
     //   • Узел upgrade и прочие → пропускаем.
     //
     // insideAllied=true означает, что мы находимся внутри раздела связанного каталога
@@ -243,19 +255,19 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         // Определяем: является ли текущий узел или его контекст разделом «союзных» юнитов.
         // Критерии:
         //   1. Уже находимся внутри Allied-раздела (флаг от родителя)
-        //   2. Узел-контейнер (не unit/model) с именем, содержащим «allied» (без учёта регистра)
+        //   2. Узел-контейнер (selectionEntryGroup или без entryType) с именем, содержащим «allied»
         //   3. catalogueId совпадает с Unaligned Forces
         const isAlliedSection = insideAllied
-          || (!node.entryType && node.name?.toLowerCase().includes('allied'))
+          || (isContainerItem(node) && node.name?.toLowerCase().includes('allied'))
           || node.catalogueId === UNALIGNED_FORCES_ID;
 
         if (node.entryType === 'unit' || node.entryType === 'model') {
           // Отряд или модель — добавляем в результат.
           // В children находится состав отряда, а не отдельные юниты → не рекурсируем.
           result.push(isAlliedSection ? { ...node, _isAllied: true } : node);
-        } else if (!node.entryType && Array.isArray(node.children) && node.children.length > 0) {
-          // Контейнерный узел (категория, раздел каталога) — рекурсируем, ища вложенные отряды.
-          result.push(...collectUnits(node.children, isAlliedSection));
+        } else if (isContainerItem(node)) {
+          // Контейнерный узел (категория, раздел каталога, selectionEntryGroup) — рекурсируем.
+          result.push(...collectUnits(node.children!, isAlliedSection));
         }
         // Узлы типа "upgrade" и прочие пропускаем.
       }
@@ -328,7 +340,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         : undefined;
 
       // Строим дерево дочерних узлов для контейнеров типа "unit".
-      // Сохраняем промежуточные контейнеры (entryType=null) как узлы дерева,
+      // Сохраняем промежуточные контейнеры (entryType=null или "selectionEntryGroup") как узлы дерева,
       // чтобы в UI отображалась полная иерархия вложенности через children.
       // parentCostBands — диапазоны родительского [U], передаются дочерним [M] без собственных costTiers
       // (пример: Poxwalkers [U] имеет costTiers, а дочерний [M] "Poxwalker" — нет).
@@ -346,9 +358,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         // НЕ применяем в рекурсивных вызовах из промежуточных контейнеров (isNestedInContainer=true),
         // чтобы не ломать структуру Case 4 (например, Inquisitorial Agents).
         const directModelChildren = children.filter(c => c.entryType === 'model');
-        const containerChildren = children.filter(
-          c => !c.entryType && Array.isArray(c.children) && c.children.length > 0
-        );
+        const containerChildren = children.filter(isContainerItem);
         const needSyntheticContainer =
           !isNestedInContainer &&
           parentCostBands &&
@@ -427,13 +437,14 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
             } else {
               result.push(minCount !== undefined ? { ...modelUnit, minCount } : modelUnit);
             }
-          } else if (!child.entryType && Array.isArray(child.children) && child.children.length > 0) {
-            // Промежуточный контейнер — передаём parentCostBands дальше по дереву.
+          } else if (isContainerItem(child)) {
+            // Промежуточный контейнер (entryType=null или "selectionEntryGroup") — передаём parentCostBands дальше.
             // isNestedInContainer=true запрещает создание синтетического контейнера в рекурсивном вызове,
             // чтобы модели внутри независимых контейнеров (Case 4) не обёртывались лишним слоем.
-            const nestedRaw = buildChildTree(child.children, parentCostBands, true);
+            const nestedRaw = buildChildTree(child.children!, parentCostBands, true);
             if (nestedRaw.length > 0) {
-              // Аннотируем модели метками взаимоисключающих групп (API не сохраняет selectionEntryGroup из BSData)
+              // Аннотируем модели метками взаимоисключающих групп для случаев, когда API не кодирует
+              // взаимоисключение через отдельный selectionEntryGroup с maxSelections=1 (data-tether XOR omnispex).
               const exclusiveGroupsForContainer = CONTAINER_EXCLUSIVE_GROUPS[child.id ?? ''];
               const nested = exclusiveGroupsForContainer
                 ? nestedRaw.map(m => {
