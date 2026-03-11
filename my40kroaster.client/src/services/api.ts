@@ -158,6 +158,26 @@ interface ApiUnitItem {
   catalogueId?: string;
   // Внутренний флаг: юнит получен из раздела «Allied Units» связанного каталога
   _isAllied?: boolean;
+  // Группы модификаторов из BSData — кодируют условия скрытия (XOR-взаимоисключение).
+  // Поле появится в ответе API после того, как wh40kAPI будет обновлён (см. ниже).
+  //
+  // ЗАДАЧА ДЛЯ АГЕНТА РЕПОЗИТОРИЯ wh40kAPI (https://github.com/Shooshpanius/wh40kAPI):
+  // В БД уже хранятся BsDataModifierGroup (парсятся в BsDataImportService.cs, строки ~572-607).
+  // Нужно сделать 3 минимальных изменения, чтобы они попали в ответ /fractions/{id}/unitsTree:
+  //
+  //   1. wh40kAPI.Server/Models/BsData/BsDataUnitNode.cs — добавить свойство:
+  //        public ICollection<BsDataModifierGroup> ModifierGroups { get; set; } = [];
+  //      и в FromUnit() добавить строку:
+  //        ModifierGroups = unit.ModifierGroups,
+  //
+  //   2. wh40kAPI.Server/Controllers/BsDataFractionsController.cs — в методе GetUnitsTree()
+  //      добавить к цепочке Include:
+  //        .Include(u => u.ModifierGroups)
+  //
+  // Формат modifierGroups в ответе:
+  //   [{ "id": 123, "unitId": "...", "modifiers": "[{\"type\":\"set\",\"field\":\"hidden\",\"value\":\"true\",...}]",
+  //      "conditions": "[{\"type\":\"atLeast\",\"childId\":\"<id сиблинга>\",\"value\":\"1\",...}]" }]
+  modifierGroups?: Array<{ id?: number; unitId?: string; modifiers?: string | null; conditions?: string | null }>;
 }
 
 const DEFAULT_FACTIONS: Faction[] = [
@@ -201,13 +221,13 @@ const DEFAULT_UNITS: Unit[] = [
   { id: 'unit-18', name: 'Drop Pod', category: 'Dedicated Transport', cost: 65 },
 ];
 
-// Карта взаимоисключающих групп по id контейнера.
+// Резервная карта взаимоисключающих групп по id контейнера (используется, если API
+// ещё не возвращает modifierGroups — см. поле ApiUnitItem.modifierGroups и deriveXorGroups).
 // Ключ — id контейнера, значение — массив групп (каждая группа = список id моделей, из которых можно выбрать максимум одну).
-// В оригинальном BSData (.cat) взаимоисключение реализовано через modifier type="set" value="true" field="hidden"
-// с condition type="atLeast" на сопернике — т.е. при выборе одной модели вторая скрывается.
-// Наш API (wh40kcards.ru) это не кодирует, поэтому ограничение задаётся здесь вручную.
-// При обновлении данных игры — искать в BSData модели с <modifier type="set" value="true" field="hidden">
-// содержащие <condition> на другую модель того же юнита, и добавлять соответствующую запись сюда.
+// В BSData взаимоисключение кодируется через modifier type="set" field="hidden" value="true"
+// с condition type="atLeast" childId=<сиблинг>.
+// После обновления wh40kAPI (см. задачу в комментарии к ApiUnitItem.modifierGroups)
+// эти данные будут браться из modifierGroups динамически, и этот список станет избыточным.
 const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
   // Skitarii Rangers: «9 Skitarii Rangers» — data-tether XOR omnispex
   '24a0-5541-79b2-b1ff': [['f525-f4d5-1ea1-ecaf', '626e-72e0-7869-82c1']],
@@ -218,6 +238,79 @@ const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
   // Secutarii Peltasts [Legends]
   '347a-c7c2-1bc8-db33': [['efff-ac31-c7a5-93c6', 'fec1-2c41-7ea4-480e']],
 };
+
+// Динамически определяет XOR-группы из modifierGroups, которые возвращает API.
+// Паттерн BSData: modifier type="set" field="hidden" value="true" +
+//   condition type="atLeast" childId=<id сиблинга в том же контейнере>.
+// Если ни у одного дочернего узла нет modifierGroups — возвращает [], и используется CONTAINER_EXCLUSIVE_GROUPS.
+// Алгоритм: строим направленный граф «A скрывается при выборе B», находим связные компоненты.
+function deriveXorGroups(children: ApiUnitItem[]): string[][] {
+  const childIdSet = new Set(children.map(c => c.id).filter((id): id is string => !!id));
+  const hiddenWhen = new Map<string, Set<string>>();
+
+  for (const child of children) {
+    const id = child.id;
+    if (!id || !child.modifierGroups?.length) continue;
+
+    for (const group of child.modifierGroups) {
+      let hasHideModifier = false;
+      try {
+        if (group.modifiers) {
+          const mods = JSON.parse(group.modifiers) as Array<{ field?: string; type?: string; value?: string }>;
+          hasHideModifier = mods.some(m => m.type === 'set' && m.field === 'hidden' && m.value === 'true');
+        }
+      } catch { continue; } // некорректный JSON в поле modifiers — пропускаем группу
+      if (!hasHideModifier) continue;
+
+      try {
+        if (group.conditions) {
+          const conds = JSON.parse(group.conditions) as Array<{ childId?: string }>;
+          for (const cond of conds) {
+            if (cond.childId && childIdSet.has(cond.childId)) {
+              if (!hiddenWhen.has(id)) hiddenWhen.set(id, new Set());
+              hiddenWhen.get(id)!.add(cond.childId);
+            }
+          }
+        }
+      } catch { continue; } // некорректный JSON в поле conditions — пропускаем группу
+    }
+  }
+
+  if (hiddenWhen.size === 0) return [];
+
+  // Union-find для объединения в связные компоненты (с path compression)
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    if (!parent.has(x)) parent.set(x, x);
+    if (parent.get(x) !== x) {
+      const root = find(parent.get(x)!);
+      parent.set(x, root);
+      return root;
+    }
+    return x;
+  };
+  const unite = (a: string, b: string) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const [hiddenId, triggerIds] of hiddenWhen) {
+    for (const triggerId of triggerIds) unite(hiddenId, triggerId);
+  }
+
+  const allIds = new Set([
+    ...hiddenWhen.keys(),
+    ...[...hiddenWhen.values()].flatMap(s => [...s]),
+  ]);
+  const components = new Map<string, string[]>();
+  for (const id of allIds) {
+    const root = find(id);
+    if (!components.has(root)) components.set(root, []);
+    components.get(root)!.push(id);
+  }
+
+  return [...components.values()].filter(g => g.length > 1);
+}
 
 // Возвращает true, если узел является промежуточным контейнером (не unit/model/upgrade).
 // API wh40kcards.ru исторически использовал entryType=null, а после обновления — entryType="selectionEntryGroup".
@@ -449,9 +542,11 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
             // чтобы модели внутри независимых контейнеров (Case 4) не обёртывались лишним слоем.
             const nestedRaw = buildChildTree(child.children!, parentCostBands, true);
             if (nestedRaw.length > 0) {
-              // Аннотируем модели метками взаимоисключающих групп для случаев, когда API не кодирует
-              // взаимоисключение через отдельный selectionEntryGroup с maxSelections=1 (data-tether XOR omnispex).
-              const exclusiveGroupsForContainer = CONTAINER_EXCLUSIVE_GROUPS[child.id ?? ''];
+              // Определяем XOR-группы: сначала пробуем динамически из modifierGroups API,
+              // при отсутствии данных — берём из резервной таблицы CONTAINER_EXCLUSIVE_GROUPS.
+              const dynamicGroups = deriveXorGroups(child.children ?? []);
+              const exclusiveGroupsForContainer =
+                dynamicGroups.length > 0 ? dynamicGroups : CONTAINER_EXCLUSIVE_GROUPS[child.id ?? ''];
               const nested = exclusiveGroupsForContainer
                 ? nestedRaw.map(m => {
                     for (let gi = 0; gi < exclusiveGroupsForContainer.length; gi++) {
