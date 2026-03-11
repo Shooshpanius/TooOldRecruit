@@ -203,12 +203,16 @@ const DEFAULT_UNITS: Unit[] = [
 
 // Карта взаимоисключающих групп по id контейнера.
 // Ключ — id контейнера, значение — массив групп (каждая группа = список id моделей, из которых можно выбрать максимум одну).
-// Использовать ТОЛЬКО для случаев, когда в BSData есть selectionEntryGroup с maxSelections=1,
-// группирующий эти модели. У Skitarii Rangers/Vanguard data-tether и omnispex — НЕЗАВИСИМЫЕ опции
-// (каждый maxInRoster=1, общего родительского узла maxSelections=1 нет): обе можно брать одновременно.
-// При обновлении данных игры — искать в BSData узлы типа selectionEntryGroup с maxSelections=1,
-// извлекать их id дочерних моделей и добавлять соответствующую запись сюда.
+// В оригинальном BSData (.cat) взаимоисключение реализовано через modifier type="set" value="true" field="hidden"
+// с condition type="atLeast" на сопернике — т.е. при выборе одной модели вторая скрывается.
+// Наш API (wh40kcards.ru) это не кодирует, поэтому ограничение задаётся здесь вручную.
+// При обновлении данных игры — искать в BSData модели с <modifier type="set" value="true" field="hidden">
+// содержащие <condition> на другую модель того же юнита, и добавлять соответствующую запись сюда.
 const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
+  // Skitarii Rangers: «9 Skitarii Rangers» — data-tether XOR omnispex
+  '24a0-5541-79b2-b1ff': [['f525-f4d5-1ea1-ecaf', '626e-72e0-7869-82c1']],
+  // Skitarii Vanguard: «Skitarii Vanguard» — data-tether XOR omnispex
+  'c00c-540d-818e-9f44': [['ef06-ef9-2ff7-f92d', 'd3d5-8552-186c-8436']],
   // Secutarii Hoplites [Legends]
   'cf89-9b00-1708-2d59': [['30e9-da2c-e26b-fc20', 'a393-2cf0-b5f6-c624']],
   // Secutarii Peltasts [Legends]
