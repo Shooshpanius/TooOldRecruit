@@ -357,13 +357,19 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         // «фиксированные» [M] (min === max) → обязательные, «переменные» → в контейнере.
         // НЕ применяем в рекурсивных вызовах из промежуточных контейнеров (isNestedInContainer=true),
         // чтобы не ломать структуру Case 4 (например, Inquisitorial Agents).
+        // «Значимые» контейнеры — только те, у которых есть явные min/maxInRoster.
+        // Кампанийные контейнеры (например «Crusade», без ограничений) не учитываются:
+        // их наличие не должно блокировать создание синтетического контейнера.
         const directModelChildren = children.filter(c => c.entryType === 'model');
         const containerChildren = children.filter(isContainerItem);
+        const meaningfulContainerChildren = containerChildren.filter(
+          c => c.minInRoster != null || c.maxInRoster != null
+        );
         const needSyntheticContainer =
           !isNestedInContainer &&
           parentCostBands &&
           directModelChildren.length >= 2 &&
-          containerChildren.length === 0;
+          meaningfulContainerChildren.length === 0;
 
         if (needSyntheticContainer) {
           // «Фиксированные» модели: minInRoster === maxInRoster (всегда одинаковое количество)

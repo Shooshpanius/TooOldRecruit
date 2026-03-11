@@ -240,6 +240,9 @@ function gcd(a: number, b: number): number {
 function calcCase4ContainerMax(container: Unit, allContainers: Unit[], counts: Record<string, number>): number {
   const cMax = container.maxCount;
   if (cMax === undefined) return 99;
+  // Контейнеры с max=1 (Princeps, сержант и т.п.) всегда независимо доступны —
+  // не применяем формулу per-N, чтобы они не зависели от числа обычных моделей.
+  if (cMax <= 1) return cMax;
   for (const other of allContainers) {
     if (other.id === container.id) continue;
     const otherMax = other.maxCount;
