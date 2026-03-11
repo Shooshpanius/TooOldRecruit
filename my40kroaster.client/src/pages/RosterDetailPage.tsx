@@ -204,9 +204,18 @@ function renderFixedCompositionControls(
     const maxPerModel = model.maxInRoster ?? 0;
     const ownCount = counts[model.id] ?? minCount;
     const otherInContainer = containerTotal - ownCount;
-    const effectiveMax = parentMaxCount !== undefined
+    let effectiveMax = parentMaxCount !== undefined
       ? Math.min(maxPerModel, parentMaxCount - otherInContainer)
       : maxPerModel;
+    // Взаимоисключающая группа: если другая модель из той же группы уже выбрана (count > 0) — блокируем
+    if (model.exclusiveGroup) {
+      const groupConflict = models.some(
+        sibling => sibling.id !== model.id
+          && sibling.exclusiveGroup === model.exclusiveGroup
+          && (counts[sibling.id] ?? sibling.minCount ?? 0) > 0
+      );
+      if (groupConflict) effectiveMax = 0;
+    }
     const effectiveCap = Math.max(effectiveMax, minCount);
     const setCount = (val: number) => {
       onCountChange(model.id, Math.max(minCount, Math.min(val, effectiveCap)));
@@ -853,10 +862,12 @@ export function RosterDetailPage() {
                       // Стоимость определяется по суммарному числу моделей через costBands
                       // Отличие от Poxwalkers (Case 2): контейнерный узел имеет явное ограничение maxCount (а не только minCount)
                       // Поддерживает как несколько типов моделей (Blightlord), так и один тип (Deathshroud Terminators)
-                      // Не применяется, если контейнер содержит вложенные контейнеры вместо прямых [M]-узлов
-                      // (пример: Fortis Kill Team — «Squad Members» содержит «Additional» и «Core» как субконтейнеры).
-                      const containerHasOnlyDirectModels = (multiContainerForAll?.models ?? []).every(m => m.entryType === 'model');
-                      if (multiContainerForAll && multiContainerForAll.maxCount !== undefined && primaryUnit.costBands?.length && (multiContainerForAll.models?.length ?? 0) >= 1 && containerHasOnlyDirectModels) {
+                      // Поддерживает вложенные контейнеры (selectionEntryGroup из API): Plague Marines «Special weapons» (max=2),
+                      // Kill Team «Core»/«Additional» и т.п. — рендерятся через renderFixedCompositionControls
+                      const containerHasModels = (multiContainerForAll?.models ?? []).some(
+                        m => m.entryType === 'model' || (m.entryType === undefined && m.models && m.models.length > 0)
+                      );
+                      if (multiContainerForAll && multiContainerForAll.maxCount !== undefined && primaryUnit.costBands?.length && containerHasModels) {
                         const containerModels = multiContainerForAll.models ?? [];
                         const minContainer = multiContainerForAll.minCount ?? 1;
                         const maxContainer = multiContainerForAll.maxCount ?? 99;
@@ -865,24 +876,37 @@ export function RosterDetailPage() {
                         const directModelChildren = (primaryUnit.models ?? []).filter(m => m.entryType === 'model' && (m.minCount ?? 0) > 0);
                         const mandatoryCount = directModelChildren.reduce((sum, m) => sum + m.minCount!, 0);
                         const currentCounts = primaryUnit.modelCounts ?? {};
-                        const containerTotal = containerModels.reduce((sum, m) => sum + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
+                        // Рекурсивный подсчёт включая модели из вложенных sub-containers
+                        const containerTotal = countAllModels(containerModels, currentCounts);
                         // maxUnitSize = максимальный размер отряда (контейнер + обязательные)
                         const maxUnitSize = maxContainer + mandatoryCount;
                         const effectiveMaxContainer = maxContainer;
-                        // Ведущие модели (не зависят от числа других) — вверх списка
-                        const sortedContainerModels = [
-                          ...containerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
-                          ...containerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
+                        // Прямые [M]-модели — с calcEffectiveMax/isPrimaryContainerModel логикой
+                        const directContainerModels = containerModels.filter(m => m.entryType === 'model');
+                        // Вложенные контейнеры (selectionEntryGroup из API) — рендерятся через renderFixedCompositionControls
+                        const subContainerGroups = containerModels.filter(m => m.entryType === undefined && m.models && m.models.length > 0);
+                        const sortedDirectModels = [
+                          ...directContainerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
+                          ...directContainerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
                         ];
 
                         const handleModelCountChange = (modelId: string, val: number) => {
-                          const model = containerModels.find(m => m.id === modelId);
-                          if (!model) return;
-                          const otherTotal = containerTotal - (currentCounts[modelId] ?? (model.minCount ?? 0));
-                          const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
-                          const clamped = Math.min(effectiveMax, Math.max(model.minCount ?? 0, val));
+                          const directModel = directContainerModels.find(m => m.id === modelId);
+                          let clamped: number;
+                          if (directModel) {
+                            // Для прямых [M] — полная логика calcEffectiveMax (per-N ограничения)
+                            const otherTotal = containerTotal - (currentCounts[modelId] ?? (directModel.minCount ?? 0));
+                            const effectiveMax = calcEffectiveMax(directModel.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
+                            clamped = Math.min(effectiveMax, Math.max(directModel.minCount ?? 0, val));
+                          } else {
+                            // Для моделей из sub-containers — ограничения (min/max/parentMax) уже применяет
+                            // renderFixedCompositionControls через effectiveCap до вызова onCountChange,
+                            // поэтому здесь достаточно защиты от отрицательных значений
+                            clamped = Math.max(0, val);
+                          }
                           const newCounts = { ...currentCounts, [modelId]: clamped };
-                          const newContainerTotal = Object.values(newCounts).reduce((s, v) => s + v, 0);
+                          // Рекурсивный пересчёт containerTotal (включая sub-container models)
+                          const newContainerTotal = countAllModels(containerModels, newCounts);
                           const newTotal = newContainerTotal + mandatoryCount;
                           const newCost = getCostForModelCount(bands, newTotal);
                           const updated = unitGroups.map(g => g.id === group.id
@@ -915,7 +939,7 @@ export function RosterDetailPage() {
                               </ul>
                             )}
                             <ul className="unit-nested-models unit-nested-models--roster">
-                              {sortedContainerModels.map(model => {
+                              {sortedDirectModels.map(model => {
                                 const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                                 const otherTotal = containerTotal - count;
                                 const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
@@ -958,6 +982,12 @@ export function RosterDetailPage() {
                                   </li>
                                 );
                               })}
+                              {/* Вложенные контейнеры (selectionEntryGroup): «Special weapons», «Heavy weapons» и т.п. */}
+                              {subContainerGroups.length > 0 && renderFixedCompositionControls(
+                                subContainerGroups,
+                                currentCounts,
+                                handleModelCountChange,
+                              )}
                               {(containerTotal < minContainer || containerTotal > effectiveMaxContainer) && (
                                 <li className="unit-model-count-hint">
                                   Итого: {containerTotal} / {effectiveMaxContainer} (мин. {minContainer})
