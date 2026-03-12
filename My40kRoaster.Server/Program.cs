@@ -7,8 +7,10 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Server=localhost;Port=3306;Database=rosters;User=rosters_user;Password=rosters_pass;";
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=rosters.db"));
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];
@@ -56,28 +58,11 @@ builder.Services.AddHttpClient("wh40kapi", client =>
 
 var app = builder.Build();
 
-// Ensure database is created
+// Создаём схему БД при первом запуске
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-    // Add UnitsJson column for existing databases (idempotent)
-    try
-    {
-        db.Database.ExecuteSqlRaw("ALTER TABLE Rosters ADD COLUMN UnitsJson TEXT NOT NULL DEFAULT '[]'");
-    }
-    catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column name"))
-    {
-        // Column already exists, no action needed
-    }
-    try
-    {
-        db.Database.ExecuteSqlRaw("ALTER TABLE Rosters ADD COLUMN AllowLegends INTEGER NOT NULL DEFAULT 0");
-    }
-    catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column name"))
-    {
-        // Column already exists, no action needed
-    }
 }
 
 app.UseDefaultFiles();
