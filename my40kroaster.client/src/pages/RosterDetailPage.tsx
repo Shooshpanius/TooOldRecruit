@@ -86,16 +86,6 @@ function calcCase4ModelMax(modelMaxInRoster: number | undefined, effectiveCMax: 
   return Math.max(0, Math.min(maxPerModel, effectiveCMax - otherInContainer));
 }
 
-// Возвращает «ведущий» контейнер — с наибольшим maxCount.
-// Для Case 4: стоимость отряда считается по ведущему контейнеру (Acolytes, не Servitors),
-// так как costBands калиброваны по числу агентов (5–10), а не по суммарному размеру отряда.
-function findCase4PrimaryContainer(allContainers: Unit[]): Unit | undefined {
-  return allContainers.reduce<Unit | undefined>((best, c) => {
-    const bestMax = best?.maxCount ?? -1;
-    return (c.maxCount ?? -1) > bestMax ? c : best;
-  }, undefined);
-}
-
 // Определяет, является ли модель «ведущей» — не зависит от числа других моделей через правило 1:N.
 // Ведущие модели отображаются вверху списка.
 // Если maxInRoster >= maxUnitSize — модель может занять все слоты, считается ведущей.
@@ -745,8 +735,8 @@ export function RosterDetailPage() {
                           (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0),
                           0
                         );
-                        // Стоимость считается по «ведущему» контейнеру (Acolytes, а не Servitors)
-                        const primaryContainer = findCase4PrimaryContainer(allBoundedContainers);
+                        // Стоимость определяется по суммарному числу моделей во ВСЕХ контейнерах
+                        // (costBands в BSData всегда калиброваны по общему числу миниатюр отряда).
 
                         const handleModelCountChange = (containerId: string, modelId: string, val: number) => {
                           const container = allBoundedContainers.find(c => c.id === containerId);
@@ -760,16 +750,17 @@ export function RosterDetailPage() {
                           const effectiveMax = calcCase4ModelMax(model?.maxInRoster, effectiveCMax, cTotal, count);
                           const clamped = Math.min(effectiveMax, Math.max(model?.minCount ?? 0, val));
                           const newCounts = { ...currentCounts, [modelId]: clamped };
-                          // Стоимость пересчитывается по ведущему контейнеру
-                          const primaryModelCount = (primaryContainer?.models ?? []).reduce(
-                            (s, m) => s + (newCounts[m.id] ?? 0), 0
+                          // Стоимость пересчитывается по суммарному числу моделей во всех контейнерах
+                          const newTotalCount = allBoundedContainers.reduce(
+                            (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (newCounts[m.id] ?? (m.minCount ?? 0)), 0),
+                            0
                           );
-                          const newCost = getCostForModelCount(bands, primaryModelCount);
+                          const newCost = getCostForModelCount(bands, newTotalCount);
                           const updated = unitGroups.map(g => g.id === group.id
                             ? {
                                 ...g,
                                 units: g.units.map((u, idx) => idx === 0
-                                  ? { ...u, modelCounts: newCounts, modelCount: primaryModelCount, cost: newCost }
+                                  ? { ...u, modelCounts: newCounts, modelCount: newTotalCount, cost: newCost }
                                   : u
                                 )
                               }

@@ -279,16 +279,6 @@ function calcCase4ModelMax(modelMaxInRoster: number | undefined, effectiveCMax: 
   return Math.max(0, Math.min(maxPerModel, effectiveCMax - otherInContainer));
 }
 
-// Возвращает «ведущий» контейнер — с наибольшим maxCount.
-// Для Case 4: стоимость отряда считается по ведущему контейнеру (Acolytes, не Servitors),
-// так как costBands калиброваны по числу агентов (5–10), а не по суммарному размеру отряда.
-function findCase4PrimaryContainer(allContainers: Unit[]): Unit | undefined {
-  return allContainers.reduce<Unit | undefined>((best, c) => {
-    const bestMax = best?.maxCount ?? -1;
-    return (c.maxCount ?? -1) > bestMax ? c : best;
-  }, undefined);
-}
-
 // Определяет, является ли модель «ведущей» — не зависит от числа других моделей через правило 1:N.
 // Ведущие модели отображаются вверху списка.
 // Если maxInRoster >= maxUnitSize — модель может занять все слоты, считается ведущей.
@@ -419,11 +409,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
         (sum, c) => sum + (c.models ?? []).reduce((cs, m) => cs + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0),
         0
       );
-      // Стоимость считается по «ведущему» контейнеру (наибольший maxCount = Acolytes),
-      // т.к. costBands калиброваны под число агентов (5–10), а не суммарный размер с сервиторами.
-      const primaryContainer = findCase4PrimaryContainer(allBoundedContainers);
-      const primaryModelCount = (primaryContainer?.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
-      const cost = getCostForModelCount(unit.costBands!, primaryModelCount);
+      // Стоимость определяется по суммарному числу моделей во ВСЕХ контейнерах
+      // (costBands в BSData всегда калиброваны по общему числу миниатюр отряда).
+      const cost = getCostForModelCount(unit.costBands!, totalCount);
       // Все контейнеры должны удовлетворять своим ограничениям с учётом перекрёстных зависимостей
       const containersValid = allBoundedContainers.every(c => {
         const cTotal = (c.models ?? []).reduce((s, m) => s + (modelCounts[m.id] ?? (m.minCount ?? 0)), 0);
@@ -457,7 +445,7 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   modelCounts: Object.fromEntries(
                     allBoundedContainers.flatMap(c => (c.models ?? []).map(m => [m.id, modelCounts[m.id] ?? (m.minCount ?? 0)]))
                   ),
-                  modelCount: primaryModelCount,
+                  modelCount: totalCount,
                 })}
                 disabled={!canAdd || limitReached}
                 aria-label={attachMode ? 'Присоединить' : 'Добавить'}

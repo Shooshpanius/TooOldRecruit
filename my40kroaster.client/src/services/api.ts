@@ -158,25 +158,18 @@ interface ApiUnitItem {
   catalogueId?: string;
   // Внутренний флаг: юнит получен из раздела «Allied Units» связанного каталога
   _isAllied?: boolean;
-  // Группы модификаторов из BSData — кодируют условия скрытия (XOR-взаимоисключение).
-  // Поле появится в ответе API после того, как wh40kAPI будет обновлён (см. ниже).
+  // Группы модификаторов из BSData — могут кодировать условия скрытия (XOR-взаимоисключение).
+  // Поле присутствует в ответе API (обновлено в wh40kAPI), но содержит только BsDataModifierGroup
+  // уровня юнита (Crusade и т.п.) — НЕ содержит XOR-модификаторов отдельных entry-нод.
   //
-  // ЗАДАЧА ДЛЯ АГЕНТА РЕПОЗИТОРИЯ wh40kAPI (https://github.com/Shooshpanius/wh40kAPI):
-  // В БД уже хранятся BsDataModifierGroup (парсятся в BsDataImportService.cs, строки ~572-607).
-  // Нужно сделать 3 минимальных изменения, чтобы они попали в ответ /fractions/{id}/unitsTree:
+  // Для работы deriveXorGroups нужно, чтобы API также экспортировал индивидуальные
+  // modifier-элементы (type="set", field="hidden", value="true" с condition childId) с каждого
+  // дочернего узла модели внутри контейнера. В BSData они хранятся как <modifier> на <selectionEntry>,
+  // а не как <modifierGroup> на юните. Требуется отдельная таблица BsDataModifier в wh40kAPI
+  // и поле entryModifiers?: ... в ответе /fractions/{id}/unitsTree для дочерних узлов.
   //
-  //   1. wh40kAPI.Server/Models/BsData/BsDataUnitNode.cs — добавить свойство:
-  //        public ICollection<BsDataModifierGroup> ModifierGroups { get; set; } = [];
-  //      и в FromUnit() добавить строку:
-  //        ModifierGroups = unit.ModifierGroups,
-  //
-  //   2. wh40kAPI.Server/Controllers/BsDataFractionsController.cs — в методе GetUnitsTree()
-  //      добавить к цепочке Include:
-  //        .Include(u => u.ModifierGroups)
-  //
-  // Формат modifierGroups в ответе:
-  //   [{ "id": 123, "unitId": "...", "modifiers": "[{\"type\":\"set\",\"field\":\"hidden\",\"value\":\"true\",...}]",
-  //      "conditions": "[{\"type\":\"atLeast\",\"childId\":\"<id сиблинга>\",\"value\":\"1\",...}]" }]
+  // До реализации этого динамического подхода XOR обеспечивается через
+  // статическую таблицу CONTAINER_EXCLUSIVE_GROUPS ниже.
   modifierGroups?: Array<{ id?: number; unitId?: string; modifiers?: string | null; conditions?: string | null }>;
 }
 
@@ -221,13 +214,12 @@ const DEFAULT_UNITS: Unit[] = [
   { id: 'unit-18', name: 'Drop Pod', category: 'Dedicated Transport', cost: 65 },
 ];
 
-// Резервная карта взаимоисключающих групп по id контейнера (используется, если API
-// ещё не возвращает modifierGroups — см. поле ApiUnitItem.modifierGroups и deriveXorGroups).
+// Резервная карта взаимоисключающих групп по id контейнера.
 // Ключ — id контейнера, значение — массив групп (каждая группа = список id моделей, из которых можно выбрать максимум одну).
 // В BSData взаимоисключение кодируется через modifier type="set" field="hidden" value="true"
-// с condition type="atLeast" childId=<сиблинг>.
-// После обновления wh40kAPI (см. задачу в комментарии к ApiUnitItem.modifierGroups)
-// эти данные будут браться из modifierGroups динамически, и этот список станет избыточным.
+// с condition type="atLeast" childId=<сиблинг> на уровне entry-узла (не modifierGroup юнита).
+// Динамическая альтернатива через deriveXorGroups не работает с текущим форматом API,
+// т.к. XOR-условия хранятся в entry-level modifier-ах, не попадающих в modifierGroups.
 const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
   // Skitarii Rangers: «9 Skitarii Rangers» — data-tether XOR omnispex
   '24a0-5541-79b2-b1ff': [['f525-f4d5-1ea1-ecaf', '626e-72e0-7869-82c1']],
