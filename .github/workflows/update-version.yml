@@ -1,0 +1,52 @@
+name: Обновление версии при слиянии PR
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update-version:
+    # Выполняем только при слиянии PR
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Получение кода
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Обновление version.ts
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+        run: |
+          set -e
+
+          # Проверяем, что дата слияния доступна
+          if [ -z "$MERGED_AT" ]; then
+            echo "Ошибка: MERGED_AT пустое значение" >&2
+            exit 1
+          fi
+
+          # Формируем дату в формате DD.MM.YYYY из ISO-даты слияния PR
+          PR_DATE=$(date -d "$MERGED_AT" '+%d.%m.%Y')
+
+          # Записываем новый version.ts
+          {
+            echo "// Номер и дата последнего принятого пулл реквеста"
+            echo "export const LAST_PR_NUMBER = ${PR_NUMBER};"
+            echo "export const LAST_PR_DATE = '${PR_DATE}';"
+          } > my40kroaster.client/src/version.ts
+
+      - name: Коммит и публикация изменений
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add my40kroaster.client/src/version.ts
+          git diff --cached --quiet || git commit -m "chore: обновление версии — PR #${PR_NUMBER}"
+          git push
