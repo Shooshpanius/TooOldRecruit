@@ -56,7 +56,8 @@ export interface Unit {
   // Количество миниатюр по каждому типу модели (для отрядов с несколькими типами моделей)
   modelCounts?: Record<string, number>;
   // Идентификатор взаимоисключающей группы: модели с одинаковым exclusiveGroup — «максимум одна из группы».
-  // Аннотируется в buildChildTree из CONTAINER_EXCLUSIVE_GROUPS (API не сохраняет selectionEntryGroup из BSData).
+  // Источник: динамически из modifierGroups API (deriveXorGroups в api.ts) или, если API ещё не
+  // возвращает modifierGroups, из резервной таблицы CONTAINER_EXCLUSIVE_GROUPS в api.ts.
   exclusiveGroup?: string;
 }
 
