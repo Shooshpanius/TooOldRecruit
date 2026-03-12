@@ -883,6 +883,13 @@ export function RosterDetailPage() {
                           ...directContainerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
                           ...directContainerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
                         ];
+                        // Предварительный расчёт занятых XOR-групп: exclusiveGroup → id выбранной модели.
+                        const selectedInExclusiveGroup = new Map<string, string>();
+                        for (const m of sortedDirectModels) {
+                          if (m.exclusiveGroup && (currentCounts[m.id] ?? 0) > 0) {
+                            selectedInExclusiveGroup.set(m.exclusiveGroup, m.id);
+                          }
+                        }
 
                         const handleModelCountChange = (modelId: string, val: number) => {
                           const directModel = directContainerModels.find(m => m.id === modelId);
@@ -890,7 +897,12 @@ export function RosterDetailPage() {
                           if (directModel) {
                             // Для прямых [M] — полная логика calcEffectiveMax (per-N ограничения)
                             const otherTotal = containerTotal - (currentCounts[modelId] ?? (directModel.minCount ?? 0));
-                            const effectiveMax = calcEffectiveMax(directModel.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
+                            let effectiveMax = calcEffectiveMax(directModel.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
+                            // Взаимоисключающая группа: если другая модель из той же группы уже выбрана — блокируем
+                            if (directModel.exclusiveGroup) {
+                              const selectedId = selectedInExclusiveGroup.get(directModel.exclusiveGroup);
+                              if (selectedId !== undefined && selectedId !== directModel.id) effectiveMax = 0;
+                            }
                             clamped = Math.min(effectiveMax, Math.max(directModel.minCount ?? 0, val));
                           } else {
                             // Для моделей из sub-containers — ограничения (min/max/parentMax) уже применяет
@@ -936,7 +948,12 @@ export function RosterDetailPage() {
                               {sortedDirectModels.map(model => {
                                 const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                                 const otherTotal = containerTotal - count;
-                                const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
+                                let effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, containerTotal + mandatoryCount, maxUnitSize);
+                                // Взаимоисключающая группа: если другая модель из той же группы уже выбрана — блокируем
+                                if (model.exclusiveGroup) {
+                                  const selectedId = selectedInExclusiveGroup.get(model.exclusiveGroup);
+                                  if (selectedId !== undefined && selectedId !== model.id) effectiveMax = 0;
+                                }
                                 const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize);
                                 return (
                                   <li key={model.id} className={`unit-nested-model-item${isPrimary ? ' unit-nested-model-item--primary' : ''}`}>

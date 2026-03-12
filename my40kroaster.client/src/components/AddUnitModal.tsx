@@ -559,7 +559,9 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
       const maxUnitSize = maxContainer + mandatoryCount;
       const effectiveMaxContainer = maxContainer;
       const isValidTotal = containerTotal >= minContainer && containerTotal <= effectiveMaxContainer;
-      const canAdd = isValidTotal && (remainingPoints === undefined || cost <= remainingPoints);
+      // Проверяем взаимоисключающие группы (data-tether XOR omnispex и т.п.)
+      const isXorValid = validateCompositionMinima(unit.models ?? [], modelCounts);
+      const canAdd = isValidTotal && isXorValid && (remainingPoints === undefined || cost <= remainingPoints);
       const inRoster = countInRoster(unit.id);
       const limitReached = unit.maxInRoster !== undefined && inRoster >= unit.maxInRoster;
       // Прямые [M]-модели — с calcEffectiveMax/isPrimaryContainerModel логикой
@@ -570,6 +572,14 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
         ...directContainerModels.filter(m => isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
         ...directContainerModels.filter(m => !isPrimaryContainerModel(m.maxInRoster, maxUnitSize)),
       ];
+      // Предварительный расчёт занятых XOR-групп: exclusiveGroup → id выбранной модели.
+      // Позволяет за O(1) определить XOR-конфликт при рендере каждой модели (вместо O(n) поиска).
+      const selectedInExclusiveGroup = new Map<string, string>();
+      for (const m of sortedDirectModels) {
+        if (m.exclusiveGroup && (modelCounts[m.id] ?? 0) > 0) {
+          selectedInExclusiveGroup.set(m.exclusiveGroup, m.id);
+        }
+      }
       return (
         <li key={unit.id} className="unit-item">
           <div className="unit-item-top">
@@ -619,7 +629,12 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
             {sortedDirectModels.map(model => {
               const count = modelCounts[model.id] ?? (model.minCount ?? 0);
               const otherTotal = containerTotal - count;
-              const effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, totalCount, maxUnitSize);
+              let effectiveMax = calcEffectiveMax(model.maxInRoster, effectiveMaxContainer, otherTotal, totalCount, maxUnitSize);
+              // Взаимоисключающая группа: если другая модель из той же группы уже выбрана — блокируем
+              if (model.exclusiveGroup) {
+                const selectedId = selectedInExclusiveGroup.get(model.exclusiveGroup);
+                if (selectedId !== undefined && selectedId !== model.id) effectiveMax = 0;
+              }
               const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize);
               return (
                 <li key={model.id} className={`unit-nested-model-item${isPrimary ? ' unit-nested-model-item--primary' : ''}`}>
