@@ -213,41 +213,55 @@ function renderFixedCompositionControls(
     const setCount = (val: number) => {
       onCountChange(model.id, Math.max(minCount, Math.min(val, effectiveCap)));
     };
+    // Бинарный выбор (0 или 1): показываем чекбокс вместо +/−
+    const isBinary = minCount === 0 && maxPerModel === 1;
     return (
       <li key={model.id} className="unit-nested-model-item">
         <span className="unit-nested-model-name">
           {model.name}
           {model.entryType === 'model' && <span className="unit-type-badge">[M]</span>}
         </span>
-        <div className="unit-model-count">
-          <span className="unit-model-count-label">Миниатюр:</span>
-          <button
-            type="button"
-            className="unit-model-count-btn"
-            onClick={() => setCount(ownCount - 1)}
-            disabled={ownCount <= minCount}
-            aria-label="Уменьшить количество миниатюр"
-          >−</button>
-          <input
-            type="number"
-            className="unit-model-count-input"
-            value={ownCount}
-            min={minCount}
-            max={effectiveCap}
-            onChange={e => {
-              const v = parseInt(e.target.value, 10);
-              if (!isNaN(v)) setCount(v);
-            }}
-            aria-label="Количество миниатюр"
-          />
-          <button
-            type="button"
-            className="unit-model-count-btn"
-            onClick={() => setCount(ownCount + 1)}
-            disabled={ownCount >= effectiveCap}
-            aria-label="Увеличить количество миниатюр"
-          >+</button>
-        </div>
+        {isBinary ? (
+          <label className="unit-model-checkbox">
+            <input
+              type="checkbox"
+              checked={ownCount > 0}
+              disabled={effectiveMax === 0}
+              onChange={e => setCount(e.target.checked ? 1 : 0)}
+              aria-label={`Добавить ${model.name}`}
+            />
+          </label>
+        ) : (
+          <div className="unit-model-count">
+            <span className="unit-model-count-label">Миниатюр:</span>
+            <button
+              type="button"
+              className="unit-model-count-btn"
+              onClick={() => setCount(ownCount - 1)}
+              disabled={ownCount <= minCount}
+              aria-label="Уменьшить количество миниатюр"
+            >−</button>
+            <input
+              type="number"
+              className="unit-model-count-input"
+              value={ownCount}
+              min={minCount}
+              max={effectiveCap}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) setCount(v);
+              }}
+              aria-label="Количество миниатюр"
+            />
+            <button
+              type="button"
+              className="unit-model-count-btn"
+              onClick={() => setCount(ownCount + 1)}
+              disabled={ownCount >= effectiveCap}
+              aria-label="Увеличить количество миниатюр"
+            >+</button>
+          </div>
+        )}
       </li>
     );
   });
@@ -796,41 +810,55 @@ export function RosterDetailPage() {
                                       const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                                       // per-N формула для моделей-специалистов; простая ёмкость для базовых
                                       const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
+                                      // Бинарный выбор (0 или 1): чекбокс вместо +/−
+                                      const isBinary = (model.minCount ?? 0) === 0 && (model.maxInRoster ?? 0) === 1;
                                       return (
                                         <li key={model.id} className="unit-nested-model-item">
                                           <span className="unit-nested-model-name">
                                             {model.name}
                                             <span className="unit-type-badge">[M]</span>
                                           </span>
-                                          <div className="unit-model-count">
-                                            <span className="unit-model-count-label">Миниатюр:</span>
-                                            <button
-                                              type="button"
-                                              className="unit-model-count-btn"
-                                              onClick={() => handleModelCountChange(container.id, model.id, count - 1)}
-                                              disabled={count <= (model.minCount ?? 0)}
-                                              aria-label="Уменьшить количество миниатюр"
-                                            >−</button>
-                                            <input
-                                              type="number"
-                                              className="unit-model-count-input"
-                                              value={count}
-                                              min={model.minCount ?? 0}
-                                              max={effectiveMax}
-                                              onChange={e => {
-                                                const v = parseInt(e.target.value, 10);
-                                                if (!isNaN(v)) handleModelCountChange(container.id, model.id, v);
-                                              }}
-                                              aria-label="Количество миниатюр"
-                                            />
-                                            <button
-                                              type="button"
-                                              className="unit-model-count-btn"
-                                              onClick={() => handleModelCountChange(container.id, model.id, count + 1)}
-                                              disabled={count >= effectiveMax}
-                                              aria-label="Увеличить количество миниатюр"
-                                            >+</button>
-                                          </div>
+                                          {isBinary ? (
+                                            <label className="unit-model-checkbox">
+                                              <input
+                                                type="checkbox"
+                                                checked={count > 0}
+                                                disabled={effectiveMax === 0}
+                                                onChange={e => handleModelCountChange(container.id, model.id, e.target.checked ? 1 : 0)}
+                                                aria-label={`Добавить ${model.name}`}
+                                              />
+                                            </label>
+                                          ) : (
+                                            <div className="unit-model-count">
+                                              <span className="unit-model-count-label">Миниатюр:</span>
+                                              <button
+                                                type="button"
+                                                className="unit-model-count-btn"
+                                                onClick={() => handleModelCountChange(container.id, model.id, count - 1)}
+                                                disabled={count <= (model.minCount ?? 0)}
+                                                aria-label="Уменьшить количество миниатюр"
+                                              >−</button>
+                                              <input
+                                                type="number"
+                                                className="unit-model-count-input"
+                                                value={count}
+                                                min={model.minCount ?? 0}
+                                                max={effectiveMax}
+                                                onChange={e => {
+                                                  const v = parseInt(e.target.value, 10);
+                                                  if (!isNaN(v)) handleModelCountChange(container.id, model.id, v);
+                                                }}
+                                                aria-label="Количество миниатюр"
+                                              />
+                                              <button
+                                                type="button"
+                                                className="unit-model-count-btn"
+                                                onClick={() => handleModelCountChange(container.id, model.id, count + 1)}
+                                                disabled={count >= effectiveMax}
+                                                aria-label="Увеличить количество миниатюр"
+                                              >+</button>
+                                            </div>
+                                          )}
                                         </li>
                                       );
                                     })}
@@ -955,41 +983,55 @@ export function RosterDetailPage() {
                                   if (selectedId !== undefined && selectedId !== model.id) effectiveMax = 0;
                                 }
                                 const isPrimary = isPrimaryContainerModel(model.maxInRoster, maxUnitSize);
+                                // Бинарный выбор (0 или 1): чекбокс вместо +/−
+                                const isBinary = (model.minCount ?? 0) === 0 && (model.maxInRoster ?? 0) === 1;
                                 return (
                                   <li key={model.id} className={`unit-nested-model-item${isPrimary ? ' unit-nested-model-item--primary' : ''}`}>
                                     <span className="unit-nested-model-name">
                                       {model.name}
                                       <span className="unit-type-badge">[M]</span>
                                     </span>
-                                    <div className="unit-model-count">
-                                      <span className="unit-model-count-label">Миниатюр:</span>
-                                      <button
-                                        type="button"
-                                        className="unit-model-count-btn"
-                                        onClick={() => handleModelCountChange(model.id, count - 1)}
-                                        disabled={count <= (model.minCount ?? 0)}
-                                        aria-label="Уменьшить количество миниатюр"
-                                      >−</button>
-                                      <input
-                                        type="number"
-                                        className="unit-model-count-input"
-                                        value={count}
-                                        min={model.minCount ?? 0}
-                                        max={effectiveMax}
-                                        onChange={e => {
-                                          const v = parseInt(e.target.value, 10);
-                                          if (!isNaN(v)) handleModelCountChange(model.id, v);
-                                        }}
-                                        aria-label="Количество миниатюр"
-                                      />
-                                      <button
-                                        type="button"
-                                        className="unit-model-count-btn"
-                                        onClick={() => handleModelCountChange(model.id, count + 1)}
-                                        disabled={count >= effectiveMax}
-                                        aria-label="Увеличить количество миниатюр"
-                                      >+</button>
-                                    </div>
+                                    {isBinary ? (
+                                      <label className="unit-model-checkbox">
+                                        <input
+                                          type="checkbox"
+                                          checked={count > 0}
+                                          disabled={effectiveMax === 0}
+                                          onChange={e => handleModelCountChange(model.id, e.target.checked ? 1 : 0)}
+                                          aria-label={`Добавить ${model.name}`}
+                                        />
+                                      </label>
+                                    ) : (
+                                      <div className="unit-model-count">
+                                        <span className="unit-model-count-label">Миниатюр:</span>
+                                        <button
+                                          type="button"
+                                          className="unit-model-count-btn"
+                                          onClick={() => handleModelCountChange(model.id, count - 1)}
+                                          disabled={count <= (model.minCount ?? 0)}
+                                          aria-label="Уменьшить количество миниатюр"
+                                        >−</button>
+                                        <input
+                                          type="number"
+                                          className="unit-model-count-input"
+                                          value={count}
+                                          min={model.minCount ?? 0}
+                                          max={effectiveMax}
+                                          onChange={e => {
+                                            const v = parseInt(e.target.value, 10);
+                                            if (!isNaN(v)) handleModelCountChange(model.id, v);
+                                          }}
+                                          aria-label="Количество миниатюр"
+                                        />
+                                        <button
+                                          type="button"
+                                          className="unit-model-count-btn"
+                                          onClick={() => handleModelCountChange(model.id, count + 1)}
+                                          disabled={count >= effectiveMax}
+                                          aria-label="Увеличить количество миниатюр"
+                                        >+</button>
+                                      </div>
+                                    )}
                                   </li>
                                 );
                               })}
@@ -1052,6 +1094,8 @@ export function RosterDetailPage() {
                               const count = currentCounts[model.id] ?? (model.minCount ?? 0);
                               const otherTotal = totalCount - count;
                               const effectiveMax = calcEffectiveMax(model.maxInRoster, maxTotal, otherTotal);
+                              // Бинарный выбор (0 или 1): чекбокс вместо +/−
+                              const isBinary = (model.minCount ?? 0) === 0 && (model.maxInRoster ?? 0) === 1;
                               return (
                                 <li key={model.id} className="unit-nested-model-item">
                                   <span className="unit-nested-model-name">
@@ -1061,35 +1105,47 @@ export function RosterDetailPage() {
                                   {model.cost !== undefined && (
                                     <span className="unit-cost">{model.cost} pts</span>
                                   )}
-                                  <div className="unit-model-count">
-                                    <span className="unit-model-count-label">Миниатюр:</span>
-                                    <button
-                                      type="button"
-                                      className="unit-model-count-btn"
-                                      onClick={() => handleModelCountChange(model.id, count - 1)}
-                                      disabled={count <= (model.minCount ?? 0)}
-                                      aria-label="Уменьшить количество миниатюр"
-                                    >−</button>
-                                    <input
-                                      type="number"
-                                      className="unit-model-count-input"
-                                      value={count}
-                                      min={model.minCount ?? 0}
-                                      max={effectiveMax}
-                                      onChange={e => {
-                                        const v = parseInt(e.target.value, 10);
-                                        if (!isNaN(v)) handleModelCountChange(model.id, v);
-                                      }}
-                                      aria-label="Количество миниатюр"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="unit-model-count-btn"
-                                      onClick={() => handleModelCountChange(model.id, count + 1)}
-                                      disabled={count >= effectiveMax}
-                                      aria-label="Увеличить количество миниатюр"
-                                    >+</button>
-                                  </div>
+                                  {isBinary ? (
+                                    <label className="unit-model-checkbox">
+                                      <input
+                                        type="checkbox"
+                                        checked={count > 0}
+                                        disabled={effectiveMax === 0}
+                                        onChange={e => handleModelCountChange(model.id, e.target.checked ? 1 : 0)}
+                                        aria-label={`Добавить ${model.name}`}
+                                      />
+                                    </label>
+                                  ) : (
+                                    <div className="unit-model-count">
+                                      <span className="unit-model-count-label">Миниатюр:</span>
+                                      <button
+                                        type="button"
+                                        className="unit-model-count-btn"
+                                        onClick={() => handleModelCountChange(model.id, count - 1)}
+                                        disabled={count <= (model.minCount ?? 0)}
+                                        aria-label="Уменьшить количество миниатюр"
+                                      >−</button>
+                                      <input
+                                        type="number"
+                                        className="unit-model-count-input"
+                                        value={count}
+                                        min={model.minCount ?? 0}
+                                        max={effectiveMax}
+                                        onChange={e => {
+                                          const v = parseInt(e.target.value, 10);
+                                          if (!isNaN(v)) handleModelCountChange(model.id, v);
+                                        }}
+                                        aria-label="Количество миниатюр"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="unit-model-count-btn"
+                                        onClick={() => handleModelCountChange(model.id, count + 1)}
+                                        disabled={count >= effectiveMax}
+                                        aria-label="Увеличить количество миниатюр"
+                                      >+</button>
+                                    </div>
+                                  )}
                                 </li>
                               );
                             })}
