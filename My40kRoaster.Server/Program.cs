@@ -7,8 +7,13 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Server=localhost;Port=3306;Database=rosters;User=rosters_user;Password=rosters_pass;";
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    if (builder.Environment.IsProduction())
+        throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required in production.");
+    connectionString = "Server=localhost;Port=3306;Database=rosters;User=rosters_user;Password=rosters_pass;";
+}
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
@@ -19,6 +24,9 @@ if (string.IsNullOrEmpty(jwtKey))
     if (builder.Environment.IsProduction())
         throw new InvalidOperationException("Jwt:Key configuration is required in production.");
     jwtKey = "default-secret-key-for-dev-32chars!!";
+    // Записываем разрешённый ключ обратно в конфигурацию, чтобы контроллеры
+    // читали тот же ключ через IConfiguration["Jwt:Key"] без дублирования логики fallback.
+    builder.Configuration["Jwt:Key"] = jwtKey;
 }
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

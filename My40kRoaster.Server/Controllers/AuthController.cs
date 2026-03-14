@@ -16,7 +16,7 @@ namespace My40kRoaster.Server.Controllers
         [HttpPost("google")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
         {
-            // Verify Google ID token
+            // Проверяем Google ID token через публичный эндпоинт Google
             using var httpClient = new HttpClient();
             var response = await httpClient.GetAsync(
                 $"https://oauth2.googleapis.com/tokeninfo?id_token={request.IdToken}");
@@ -29,7 +29,9 @@ namespace My40kRoaster.Server.Controllers
                 return Unauthorized("Invalid token payload");
 
             var clientId = config["Google:ClientId"];
-            if (!string.IsNullOrEmpty(clientId) && payload.Aud != clientId)
+            if (string.IsNullOrEmpty(clientId))
+                return Unauthorized("Authentication service unavailable.");
+            if (payload.Aud != clientId)
                 return Unauthorized("Token audience mismatch");
 
             var user = await db.Users.FirstOrDefaultAsync(u => u.GoogleId == payload.Sub);
@@ -53,8 +55,10 @@ namespace My40kRoaster.Server.Controllers
         private string GenerateJwtToken(User user)
         {
             var jwtKey = config["Jwt:Key"];
+            // Этот путь недостижим если Program.cs успешно запустился (ключ проверяется при старте).
+            // Оставлено как защитная мера на случай неожиданных изменений конфигурации в runtime.
             if (string.IsNullOrEmpty(jwtKey))
-                jwtKey = "default-secret-key-for-dev-32chars!!";
+                throw new InvalidOperationException("Jwt:Key не настроен в конфигурации.");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var claims = new[]
