@@ -348,8 +348,8 @@ export function RosterDetailPage() {
   const [name, setName] = useState(roster?.name || '');
   const [pointsLimit, setPointsLimit] = useState(roster?.pointsLimit || 2000);
   const [allowLegends, setAllowLegends] = useState(roster?.allowLegends ?? false);
-  // Состояние для детачмента (выбор временно отключён — API не готов)
   const [detachmentName, setDetachmentName] = useState(roster?.detachmentName || '');
+  const [detachments, setDetachments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [unitAddTarget, setUnitAddTarget] = useState<{ groupId: string | null }>({ groupId: null });
   const [addingUnit, setAddingUnit] = useState(false);
@@ -377,7 +377,11 @@ export function RosterDetailPage() {
     }
   }, [id, token]);
 
-  // Загрузка детачментов временно отключена — API не готов
+  // Загружаем список детачментов для фракции при открытии режима редактирования
+  useEffect(() => {
+    if (!editing || !roster?.factionId) return;
+    api.getDetachments(roster.factionId).then(setDetachments).catch((err) => { console.error('Failed to load detachments:', err); setDetachments([]); });
+  }, [editing, roster?.factionId]);
 
   const persistUnits = useCallback((groups: UnitGroup[]) => {
     if (!id) return;
@@ -470,6 +474,21 @@ export function RosterDetailPage() {
               <div className="form-hint">Нельзя отключить: в ростере есть отряды с [Legends]</div>
             )}
           </div>
+          {detachments.length > 0 && (
+            <div className="form-group">
+              <label>Детачмент</label>
+              <select
+                value={detachmentName}
+                onChange={e => setDetachmentName(e.target.value)}
+                className="form-input"
+              >
+                <option value="">— не выбран —</option>
+                {detachments.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <button onClick={handleSave} disabled={saving} className="btn btn-primary">
             {saving ? 'Сохранение...' : 'Сохранить'}
           </button>
