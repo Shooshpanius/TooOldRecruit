@@ -44,45 +44,18 @@ function gcd(a: number, b: number): number {
   return a;
 }
 
-// Вычисляет эффективный максимум контейнера с учётом перекрёстных ограничений (Case 4).
-// Если в юните есть «ведущий» контейнер с бо́льшим maxCount и отношение ratio = bigMax/smallMax —
-// целое число > 1, то максимум = floor(totalОтВедущегоКонтейнера / ratio).
-// Пример: Gun Servitors (max=2) при Acolytes (max=10): ratio=5 → max=floor(acolytesTotal/5).
-function calcCase4ContainerMax(container: Unit, allContainers: Unit[], counts: Record<string, number>): number {
-  const cMax = container.maxCount;
-  if (cMax === undefined) return 99;
-  // Контейнеры с max=1 (Princeps, сержант и т.п.) всегда независимо доступны —
-  // не применяем формулу per-N, чтобы они не зависели от числа обычных моделей.
-  if (cMax <= 1) return cMax;
-  for (const other of allContainers) {
-    if (other.id === container.id) continue;
-    const otherMax = other.maxCount;
-    if (otherMax === undefined || otherMax <= cMax) continue;
-    const ratio = otherMax / cMax;
-    if (Number.isInteger(ratio) && ratio > 1) {
-      const otherTotal = (other.models ?? []).reduce((s, m) => s + (counts[m.id] ?? 0), 0);
-      return Math.floor(otherTotal / ratio);
-    }
-  }
-  return cMax;
+// Возвращает максимум контейнера для Case 4.
+// Контейнеры в Case 4 независимы друг от друга — используем только собственный maxCount.
+function calcCase4ContainerMax(container: Unit): number {
+  return container.maxCount ?? 99;
 }
 
 // Вычисляет эффективный максимум модели внутри контейнера (Case 4).
-// Если maxInRoster < effectiveCMax и НОД > 1 — правило «perCount на каждые perN».
-// Иначе — простое ограничение по оставшейся ёмкости: min(maxInRoster, effectiveCMax − others).
+// Лимит — наименьшее из собственного maxInRoster и оставшейся ёмкости контейнера.
 // Math.max(0, ...) гарантирует неотрицательный результат при переполнении контейнера.
 function calcCase4ModelMax(modelMaxInRoster: number | undefined, effectiveCMax: number, cTotal: number, count: number): number {
   const maxPerModel = modelMaxInRoster ?? effectiveCMax;
   const otherInContainer = cTotal - count;
-  if (maxPerModel < effectiveCMax) {
-    const g = gcd(maxPerModel, effectiveCMax);
-    if (g > 1 && g < effectiveCMax) {
-      const perN = effectiveCMax / g;
-      const perCount = maxPerModel / g;
-      const byRatio = Math.min(Math.floor(cTotal / perN) * perCount, maxPerModel);
-      return Math.max(0, Math.min(byRatio, effectiveCMax - otherInContainer));
-    }
-  }
   return Math.max(0, Math.min(maxPerModel, effectiveCMax - otherInContainer));
 }
 
@@ -762,8 +735,8 @@ export function RosterDetailPage() {
                           const container = allBoundedContainers.find(c => c.id === containerId);
                           if (!container) return;
                           const cModels = container.models ?? [];
-                          // Эффективный максимум контейнера с учётом перекрёстных ограничений
-                          const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
+                          // Эффективный максимум контейнера (независимый для каждого контейнера в Case 4)
+                          const effectiveCMax = calcCase4ContainerMax(container);
                           const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
                           const model = cModels.find(m => m.id === modelId);
                           const count = currentCounts[modelId] ?? (model?.minCount ?? 0);
@@ -796,8 +769,8 @@ export function RosterDetailPage() {
                               const cModels = container.models ?? [];
                               const cTotal = cModels.reduce((s, m) => s + (currentCounts[m.id] ?? (m.minCount ?? 0)), 0);
                               const cMin = container.minCount;
-                              // Эффективный максимум с учётом перекрёстных зависимостей между контейнерами
-                              const effectiveCMax = calcCase4ContainerMax(container, allBoundedContainers, currentCounts);
+                              // Эффективный максимум контейнера (независимый для каждого контейнера в Case 4)
+                              const effectiveCMax = calcCase4ContainerMax(container);
                               const isBelowMin = cMin !== undefined && cTotal < cMin;
                               const isAboveMax = cTotal > effectiveCMax;
                               const rangeStr = cMin !== undefined && cMin !== effectiveCMax
