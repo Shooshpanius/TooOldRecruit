@@ -3,20 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRosters } from '../contexts/RosterContext';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
-import type { Roster } from '../types';
 import { LAST_PR_NUMBER, LAST_PR_DATE } from '../version';
 
 export function HomePage() {
   const { user, signOut } = useAuth();
   const { rosters, loading, removeRoster } = useRosters();
   const navigate = useNavigate();
+  const [selectedRosterId, setSelectedRosterId] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = async (roster: Roster) => {
-    if (!confirm(`Удалить ростер "${roster.name}"?`)) return;
-    setDeletingId(roster.id);
+  const selectedRoster = rosters.find(r => r.id === selectedRosterId) ?? null;
+
+  const handleDelete = async () => {
+    if (!selectedRoster) return;
+    if (!confirm(`Удалить ростер "${selectedRoster.name}"?`)) return;
+    setDeletingId(selectedRoster.id);
     try {
-      await removeRoster(roster.id);
+      await removeRoster(selectedRoster.id);
+      setSelectedRosterId('');
     } finally {
       setDeletingId(null);
     }
@@ -66,33 +70,36 @@ export function HomePage() {
             </button>
           </div>
         ) : (
-          <div className="roster-grid">
-            {rosters.map(roster => (
-              <div key={roster.id} className="roster-card">
-                <div className="roster-card-header">
-                  <h3>{roster.name}</h3>
-                  <span className="points-badge">{roster.pointsLimit} очков</span>
-                </div>
-                <div className="roster-card-body">
-                  <span className="faction-label">⚔️ {roster.factionName}</span>
-                </div>
-                <div className="roster-card-footer">
-                  <button
-                    onClick={() => navigate(`/roster/${roster.id}`)}
-                    className="btn btn-primary btn-sm"
-                  >
-                    Открыть
-                  </button>
-                  <button
-                    onClick={() => handleDelete(roster)}
-                    disabled={deletingId === roster.id}
-                    className="btn btn-danger btn-sm"
-                  >
-                    Удалить
-                  </button>
-                </div>
+          <div className="roster-selector">
+            <select
+              value={selectedRosterId}
+              onChange={e => setSelectedRosterId(e.target.value)}
+              className="form-input"
+            >
+              <option value="">— Выберите ростер —</option>
+              {rosters.map(roster => (
+                <option key={roster.id} value={roster.id}>
+                  {roster.name} ({roster.factionName}, {roster.pointsLimit} очков)
+                </option>
+              ))}
+            </select>
+            {selectedRoster && (
+              <div className="roster-selector-actions">
+                <button
+                  onClick={() => navigate(`/roster/${selectedRoster.id}`)}
+                  className="btn btn-primary"
+                >
+                  Открыть
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deletingId === selectedRoster.id}
+                  className="btn btn-danger"
+                >
+                  Удалить
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
       </main>

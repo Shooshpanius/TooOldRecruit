@@ -204,6 +204,18 @@ body {
   margin-bottom: 1.25rem;
 }
 
+/* Roster Selector */
+.roster-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.roster-selector-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
 /* Roster Grid */
 .roster-grid {
   display: grid;
