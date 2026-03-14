@@ -14,7 +14,7 @@
     image: my40kroaster_front:local
     restart: always
     environment:
-      VITE_GOOGLE_CLIENT_ID: *
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     depends_on:
       - back40roster
 
