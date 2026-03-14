@@ -1,10 +1,29 @@
 # My40kRoaster
 
+<div align="center">
+
+[![Live](https://img.shields.io/badge/🚀%20Продакшн-wh40kcards.ru-darkred?style=for-the-badge&logo=google-chrome&logoColor=white)](https://wh40kcards.ru/)
+
+[![GitHub Stars](https://img.shields.io/github/stars/Shooshpanius/My40kRoaster?style=flat-square&logo=github&label=Stars)](https://github.com/Shooshpanius/My40kRoaster/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Shooshpanius/My40kRoaster?style=flat-square&logo=github&label=Forks)](https://github.com/Shooshpanius/My40kRoaster/forks)
+[![GitHub Issues](https://img.shields.io/github/issues/Shooshpanius/My40kRoaster?style=flat-square&logo=github&label=Issues)](https://github.com/Shooshpanius/My40kRoaster/issues)
+[![License](https://img.shields.io/github/license/Shooshpanius/My40kRoaster?style=flat-square&label=License)](LICENSE.txt)
+
+![.NET](https://img.shields.io/badge/.NET_9-512BD4?style=flat-square&logo=dotnet&logoColor=white)
+![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white)
+
+</div>
+
 Веб-приложение для создания и управления ростерами армий Warhammer 40,000 (10-я редакция).
 
 ## О проекте
 
 **My40kRoaster** позволяет игрокам составлять армейские ростеры для игры в Warhammer 40,000 прямо в браузере — без установки дополнительного ПО. Приложение загружает актуальные данные об отрядах и фракциях из открытой базы данных [BSData](https://github.com/BSData) через прокси-API, предоставляемое сервисом [wh40kcards.ru](https://wh40kcards.ru).
+
+> **🌐 Попробовать прямо сейчас:** [**wh40kcards.ru**](https://wh40kcards.ru/)
 
 ### Ключевые возможности
 
