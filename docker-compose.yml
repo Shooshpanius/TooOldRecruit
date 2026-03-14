@@ -7,7 +7,7 @@
       Jwt__Key: $${JWT_KEY:*}
       Jwt__Issuer: *
       Jwt__Audience: *
-      GOOGLE_CLIENT_ID: *
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
 
   front40roster:
     container_name: front40roster
