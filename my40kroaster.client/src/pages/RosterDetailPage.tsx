@@ -189,7 +189,13 @@ function renderFixedCompositionControls(
             {model.name}
             {model.entryType === 'model' && <span className="unit-type-badge">[M]</span>}
           </span>
-          <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+          {model.minCount === 1 ? (
+            <label className="unit-model-checkbox unit-model-checkbox--mandatory">
+              <input type="checkbox" checked readOnly aria-label={`${model.name} (обязательно)`} />
+            </label>
+          ) : (
+            <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+          )}
         </li>
       );
     }
@@ -994,7 +1000,13 @@ export function RosterDetailPage() {
                                       <span className="unit-type-badge">[M]</span>
                                     </span>
                                     {isFixed ? (
-                                      <span className="unit-model-count-label">×{model.minCount}</span>
+                                      model.minCount === 1 ? (
+                                        <label className="unit-model-checkbox unit-model-checkbox--mandatory">
+                                          <input type="checkbox" checked readOnly aria-label={`${model.name} (обязательно)`} />
+                                        </label>
+                                      ) : (
+                                        <span className="unit-model-count-label">×{model.minCount}</span>
+                                      )
                                     ) : isBinary ? (
                                       <label className="unit-model-checkbox">
                                         <input

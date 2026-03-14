@@ -137,7 +137,13 @@ function renderFixedCompositionControls(
             {model.name}
             {model.entryType === 'model' && <span className="unit-type-badge">[M]</span>}
           </span>
-          <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+          {model.minCount === 1 ? (
+            <label className="unit-model-checkbox unit-model-checkbox--mandatory">
+              <input type="checkbox" checked readOnly aria-label={`${model.name} (обязательно)`} />
+            </label>
+          ) : (
+            <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+          )}
         </li>
       );
     }
@@ -634,7 +640,13 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                     {m.name}
                     <span className="unit-type-badge">[M]</span>
                   </span>
-                  <span className="unit-model-count-label">× {m.minCount} (обязательно)</span>
+                  {m.minCount === 1 ? (
+                    <label className="unit-model-checkbox unit-model-checkbox--mandatory">
+                      <input type="checkbox" checked readOnly aria-label={`${m.name} (обязательно)`} />
+                    </label>
+                  ) : (
+                    <span className="unit-model-count-label">× {m.minCount} (обязательно)</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -661,7 +673,13 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                     <span className="unit-type-badge">[M]</span>
                   </span>
                   {isFixed ? (
-                    <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+                    model.minCount === 1 ? (
+                      <label className="unit-model-checkbox unit-model-checkbox--mandatory">
+                        <input type="checkbox" checked readOnly aria-label={`${model.name} (обязательно)`} />
+                      </label>
+                    ) : (
+                      <span className="unit-model-count-label">×{model.minCount} (обязательно)</span>
+                    )
                   ) : isBinary ? (
                     <label className="unit-model-checkbox">
                       <input

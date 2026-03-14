@@ -686,6 +686,12 @@ body {
   cursor: not-allowed;
 }
 
+/* Обязательный чекбокс (× 1 обязательно): отмечен, но без интерактивности */
+.unit-model-checkbox--mandatory {
+  cursor: default;
+  pointer-events: none;
+}
+
 .unit-model-count-label {
   font-size: 0.8rem;
   color: var(--text-muted, #888);
