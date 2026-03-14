@@ -105,6 +105,19 @@ export async function getFactions(): Promise<Faction[]> {
   }
 }
 
+// Загружает список детачментов для выбранной фракции через прокси-эндпоинт.
+// Возвращает пустой массив если фракция не поддерживает детачменты или API недоступен.
+export async function getDetachments(factionId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/detachments`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 interface ApiCostTier {
   id?: number;
   unitId?: string;

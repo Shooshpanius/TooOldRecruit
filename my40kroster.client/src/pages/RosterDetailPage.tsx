@@ -350,6 +350,9 @@ export function RosterDetailPage() {
   const [allowLegends, setAllowLegends] = useState(roster?.allowLegends ?? false);
   // Состояние для выбора детачмента
   const [detachmentName, setDetachmentName] = useState(roster?.detachmentName || '');
+  // Список доступных детачментов для фракции (загружается динамически)
+  const [availableDetachments, setAvailableDetachments] = useState<string[]>([]);
+  const [loadingDetachments, setLoadingDetachments] = useState(false);
   const [saving, setSaving] = useState(false);
   const [unitAddTarget, setUnitAddTarget] = useState<{ groupId: string | null }>({ groupId: null });
   const [addingUnit, setAddingUnit] = useState(false);
@@ -376,6 +379,15 @@ export function RosterDetailPage() {
       setUnitGroups(loadLocalUnits(id));
     }
   }, [id, token]);
+
+  // Загружаем список детачментов при открытии формы редактирования
+  useEffect(() => {
+    if (!editing || !roster?.factionId) return;
+    setLoadingDetachments(true);
+    api.getDetachments(roster.factionId)
+      .then(setAvailableDetachments)
+      .finally(() => setLoadingDetachments(false));
+  }, [editing, roster?.factionId]);
 
   const persistUnits = useCallback((groups: UnitGroup[]) => {
     if (!id) return;
@@ -451,13 +463,30 @@ export function RosterDetailPage() {
           </div>
           <div className="form-group">
             <label>Детачмент</label>
-            <input
-              type="text"
-              value={detachmentName}
-              onChange={e => setDetachmentName(e.target.value)}
-              placeholder="Например: Gladius Task Force"
-              className="form-input"
-            />
+            {loadingDetachments ? (
+              <div className="form-hint">Загрузка детачментов...</div>
+            ) : availableDetachments.length > 0 ? (
+              // Список детачментов успешно загружен — показываем выпадающий список
+              <select
+                value={detachmentName}
+                onChange={e => setDetachmentName(e.target.value)}
+                className="form-input"
+              >
+                <option value="">— Не выбрано —</option>
+                {availableDetachments.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            ) : (
+              // Детачменты не найдены — fallback на текстовый ввод
+              <input
+                type="text"
+                value={detachmentName}
+                onChange={e => setDetachmentName(e.target.value)}
+                placeholder="Например: Gladius Task Force"
+                className="form-input"
+              />
+            )}
           </div>
           <div className="form-group">
             <label className={`toggle-row${hasLegendsUnits ? ' toggle-row--disabled' : ''}`}>
