@@ -173,7 +173,8 @@ function renderFixedCompositionControls(
       );
     }
     const minCount = model.minCount ?? 0;
-    const maxPerModel = model.maxInRoster ?? 0;
+    // Если у модели нет явного maxInRoster, используем ёмкость родительского контейнера
+    const maxPerModel = model.maxInRoster !== undefined ? model.maxInRoster : (parentMaxCount ?? 99);
     const ownCount = counts[model.id] ?? minCount;
     const otherInContainer = containerTotal - ownCount;
     let effectiveMax = parentMaxCount !== undefined
@@ -790,7 +791,8 @@ export function RosterDetailPage() {
                                       // per-N формула для моделей-специалистов; простая ёмкость для базовых
                                       const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
                                       // Бинарный выбор (0 или 1): чекбокс вместо +/−
-                                      const isBinary = (model.minCount ?? 0) === 0 && (model.maxInRoster ?? 0) === 1;
+                                      // Если у модели нет явного maxInRoster, используем ёмкость контейнера (effectiveCMax)
+                                      const isBinary = (model.minCount ?? 0) === 0 && (model.maxInRoster !== undefined ? model.maxInRoster === 1 : effectiveCMax === 1);
                                       return (
                                         <li key={model.id} className="unit-nested-model-item">
                                           <span className="unit-nested-model-name">
