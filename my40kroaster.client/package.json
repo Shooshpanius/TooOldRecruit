@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "generate-version": "node scripts/generate-version.mjs",
+    "predev": "node scripts/generate-version.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/generate-version.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
