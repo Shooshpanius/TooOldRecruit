@@ -29,6 +29,7 @@ services:
       Jwt__Key: "${JWT_KEY:-please-change-this-secret-key-in-production-32chars}"
       Jwt__Issuer: "My40kRoaster"
       Jwt__Audience: "My40kRoaster"
+      Google__ClientId: "${GOOGLE_CLIENT_ID:-}"
     depends_on:
       db:
         condition: service_healthy

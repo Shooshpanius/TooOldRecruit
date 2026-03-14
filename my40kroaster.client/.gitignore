@@ -1,3 +1,8 @@
+# Секреты и локальные переменные окружения
+.env
+.env.local
+.env.*.local
+
 # Logs
 logs
 *.log

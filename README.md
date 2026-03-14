@@ -52,6 +52,32 @@ My40kRoaster/
 - Три основные страницы: главная (список ростеров), создание ростера, детальная страница ростера.
 - Модальное окно `AddUnitModal` с полной логикой ограничений BSData.
 
+## Настройка Google OAuth
+
+Google Client ID нужен как фронтенду (для отображения кнопки входа), так и бэкенду (для верификации токена).
+
+### Как получить Client ID
+
+1. Откройте [Google Cloud Console](https://console.cloud.google.com/).
+2. Создайте OAuth 2.0 Client ID типа **Web application**.
+3. Добавьте в **Authorized JavaScript origins**: `http://localhost:53358` (для разработки).
+
+### Для разработки
+
+**Фронтенд** — скопируйте `.env.example` в `.env` и заполните значение:
+```bash
+cp my40kroaster.client/.env.example my40kroaster.client/.env
+# Отредактируйте my40kroaster.client/.env, вставив ваш Client ID
+```
+
+**Бэкенд** — скопируйте `appsettings.Development.json.example` в `appsettings.Development.json` и заполните:
+```bash
+cp My40kRoaster.Server/appsettings.Development.json.example My40kRoaster.Server/appsettings.Development.json
+# Отредактируйте appsettings.Development.json, вставив ваш Client ID
+```
+
+Файлы `.env` и `appsettings.Development.json` добавлены в `.gitignore` и не попадут в репозиторий.
+
 ## Локальный запуск (разработка)
 
 ### Требования
@@ -62,13 +88,15 @@ My40kRoaster/
 
 ### Шаги
 
-1. Запустить MySQL (или воспользоваться Docker Compose только для БД):
+1. Настроить Google OAuth (см. раздел выше).
+
+2. Запустить MySQL (или воспользоваться Docker Compose только для БД):
 
    ```bash
    docker compose up db -d
    ```
 
-2. Запустить бэкенд:
+3. Запустить бэкенд:
 
    ```bash
    cd My40kRoaster.Server
@@ -77,7 +105,7 @@ My40kRoaster/
 
    Сервер поднимется на `https://localhost:7xxx` / `http://localhost:5022`.
 
-3. Запустить фронтенд:
+4. Запустить фронтенд:
 
    ```bash
    cd my40kroaster.client
@@ -92,16 +120,17 @@ My40kRoaster/
 Для запуска всего стека в production:
 
 ```bash
-# Задать секретный ключ JWT
+# Задать переменные окружения
 export JWT_KEY="ваш-надёжный-секретный-ключ-32-символа"
+export GOOGLE_CLIENT_ID="ваш-google-client-id.apps.googleusercontent.com"
 
 docker compose up -d --build
 ```
 
 Приложение будет доступно на `http://localhost:8080`.
 
-> **Важно:** в production обязательно задайте переменную окружения `JWT_KEY`.  
-> Переменные `Google__ClientId` и `Google__ClientSecret` нужны для корректной верификации Google-токенов.
+> **Важно:** в production обязательно задайте переменные окружения `JWT_KEY` и `GOOGLE_CLIENT_ID`.  
+> `GOOGLE_CLIENT_ID` используется сервером для верификации Google-токенов.
 
 ## Технологии
 
