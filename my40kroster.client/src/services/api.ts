@@ -401,7 +401,8 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         cost = toNum(raw);
       } else if (item.costs !== undefined) cost = toNum(item.costs);
       const isLeader = item.infoLinks?.some(l => l.type === 'rule' && l.name === 'Leader') ?? false;
-      const maxInRoster = item.maxInRoster !== undefined ? toNum(item.maxInRoster) : undefined;
+      // null означает «без ограничений» (не 0!), поэтому используем != null вместо !== undefined
+      const maxInRoster = item.maxInRoster != null ? toNum(item.maxInRoster) : undefined;
 
       // Парсим встроенные диапазоны стоимости (из unitsTree)
       const rawTiers = item.costTiers ?? item.tiers;
