@@ -4,10 +4,10 @@
 
 [![Live](https://img.shields.io/badge/🚀%20Продакшн-wh40kcards.ru-darkred?style=for-the-badge&logo=google-chrome&logoColor=white)](https://wh40kcards.ru/)
 
-[![GitHub Stars](https://img.shields.io/github/stars/Shooshpanius/My40kRoaster?style=flat-square&logo=github&label=Stars)](https://github.com/Shooshpanius/My40kRoaster/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/Shooshpanius/My40kRoaster?style=flat-square&logo=github&label=Forks)](https://github.com/Shooshpanius/My40kRoaster/forks)
-[![GitHub Issues](https://img.shields.io/github/issues/Shooshpanius/My40kRoaster?style=flat-square&logo=github&label=Issues)](https://github.com/Shooshpanius/My40kRoaster/issues)
-[![License](https://img.shields.io/github/license/Shooshpanius/My40kRoaster?style=flat-square&label=License)](LICENSE.txt)
+[![GitHub Stars](https://img.shields.io/github/stars/Shooshpanius/TooOldRecruit?style=flat-square&logo=github&label=Stars)](https://github.com/Shooshpanius/TooOldRecruit/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Shooshpanius/TooOldRecruit?style=flat-square&logo=github&label=Forks)](https://github.com/Shooshpanius/TooOldRecruit/forks)
+[![GitHub Issues](https://img.shields.io/github/issues/Shooshpanius/TooOldRecruit?style=flat-square&logo=github&label=Issues)](https://github.com/Shooshpanius/TooOldRecruit/issues)
+[![License](https://img.shields.io/github/license/Shooshpanius/TooOldRecruit?style=flat-square&label=License)](LICENSE.txt)
 
 ![.NET](https://img.shields.io/badge/.NET_9-512BD4?style=flat-square&logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
