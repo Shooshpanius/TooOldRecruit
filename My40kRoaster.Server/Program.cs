@@ -28,6 +28,18 @@ if (string.IsNullOrEmpty(jwtKey))
     // читали тот же ключ через IConfiguration["Jwt:Key"] без дублирования логики fallback.
     builder.Configuration["Jwt:Key"] = jwtKey;
 }
+// Нормализация Google:ClientId — поддержка переменной окружения GOOGLE_CLIENT_ID
+// (используется как в docker-compose, так и в прямых деплоях)
+var googleClientId = builder.Configuration["Google:ClientId"];
+if (string.IsNullOrEmpty(googleClientId))
+{
+    googleClientId = builder.Configuration["GOOGLE_CLIENT_ID"];
+    if (!string.IsNullOrEmpty(googleClientId))
+        builder.Configuration["Google:ClientId"] = googleClientId;
+}
+if (string.IsNullOrEmpty(googleClientId) && builder.Environment.IsProduction())
+    throw new InvalidOperationException("Google:ClientId (или переменная окружения GOOGLE_CLIENT_ID) обязательна в production.");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
