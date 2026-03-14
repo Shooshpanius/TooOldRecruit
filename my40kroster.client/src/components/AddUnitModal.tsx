@@ -467,41 +467,55 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                     const count = modelCounts[model.id] ?? (model.minCount ?? 0);
                     // per-N формула для моделей-специалистов; простая ёмкость для базовых моделей
                     const effectiveMax = calcCase4ModelMax(model.maxInRoster, effectiveCMax, cTotal, count);
+                    // Бинарный выбор (0 или 1): чекбокс вместо +/−
+                    const isBinary = (model.minCount ?? 0) === 0 && (model.maxInRoster ?? 0) === 1;
                     return (
                       <li key={model.id} className="unit-nested-model-item">
                         <span className="unit-nested-model-name">
                           {model.name}
                           <span className="unit-type-badge">[M]</span>
                         </span>
-                        <div className="unit-model-count">
-                          <span className="unit-model-count-label">Миниатюр:</span>
-                          <button
-                            type="button"
-                            className="unit-model-count-btn"
-                            onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: Math.max(model.minCount ?? 0, count - 1) }))}
-                            disabled={count <= (model.minCount ?? 0)}
-                            aria-label="Уменьшить количество миниатюр"
-                          >−</button>
-                          <input
-                            type="number"
-                            className="unit-model-count-input"
-                            value={count}
-                            min={model.minCount ?? 0}
-                            max={effectiveMax}
-                            onChange={e => {
-                              const v = parseInt(e.target.value, 10);
-                              if (!isNaN(v)) setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(model.minCount ?? 0, v)) }));
-                            }}
-                            aria-label="Количество миниатюр"
-                          />
-                          <button
-                            type="button"
-                            className="unit-model-count-btn"
-                            onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: count + 1 }))}
-                            disabled={count >= effectiveMax}
-                            aria-label="Увеличить количество миниатюр"
-                          >+</button>
-                        </div>
+                        {isBinary ? (
+                          <label className="unit-model-checkbox unit-model-checkbox--optional">
+                            <input
+                              type="checkbox"
+                              checked={count > 0}
+                              disabled={effectiveMax === 0}
+                              onChange={e => setModelCounts(prev => ({ ...prev, [model.id]: e.target.checked ? 1 : 0 }))}
+                              aria-label={`Добавить ${model.name}`}
+                            />
+                          </label>
+                        ) : (
+                          <div className="unit-model-count">
+                            <span className="unit-model-count-label">Миниатюр:</span>
+                            <button
+                              type="button"
+                              className="unit-model-count-btn"
+                              onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: Math.max(model.minCount ?? 0, count - 1) }))}
+                              disabled={count <= (model.minCount ?? 0)}
+                              aria-label="Уменьшить количество миниатюр"
+                            >−</button>
+                            <input
+                              type="number"
+                              className="unit-model-count-input"
+                              value={count}
+                              min={model.minCount ?? 0}
+                              max={effectiveMax}
+                              onChange={e => {
+                                const v = parseInt(e.target.value, 10);
+                                if (!isNaN(v)) setModelCounts(prev => ({ ...prev, [model.id]: Math.min(effectiveMax, Math.max(model.minCount ?? 0, v)) }));
+                              }}
+                              aria-label="Количество миниатюр"
+                            />
+                            <button
+                              type="button"
+                              className="unit-model-count-btn"
+                              onClick={() => setModelCounts(prev => ({ ...prev, [model.id]: count + 1 }))}
+                              disabled={count >= effectiveMax}
+                              aria-label="Увеличить количество миниатюр"
+                            >+</button>
+                          </div>
+                        )}
                       </li>
                     );
                   })}
