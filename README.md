@@ -7,7 +7,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/Shooshpanius/TooOldRecruit?style=flat-square&logo=github&label=Stars)](https://github.com/Shooshpanius/TooOldRecruit/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/Shooshpanius/TooOldRecruit?style=flat-square&logo=github&label=Forks)](https://github.com/Shooshpanius/TooOldRecruit/forks)
 [![GitHub Issues](https://img.shields.io/github/issues/Shooshpanius/TooOldRecruit?style=flat-square&logo=github&label=Issues)](https://github.com/Shooshpanius/TooOldRecruit/issues)
-[![License](https://img.shields.io/github/license/Shooshpanius/TooOldRecruit?style=flat-square&label=License)](LICENSE.txt)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue?style=flat-square)](LICENSE.txt)
 
 ![.NET](https://img.shields.io/badge/.NET_9-512BD4?style=flat-square&logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
