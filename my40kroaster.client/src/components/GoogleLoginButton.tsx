@@ -12,10 +12,13 @@ declare global {
         };
       };
     };
+    _env_?: {
+      VITE_GOOGLE_CLIENT_ID?: string;
+    };
   }
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID = window._env_?.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 export function GoogleLoginButton() {
   const { signIn } = useAuth();

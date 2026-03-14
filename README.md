@@ -130,7 +130,7 @@ docker compose up -d --build
 Приложение будет доступно на `http://localhost:8080`.
 
 > **Важно:** в production обязательно задайте переменные окружения `JWT_KEY` и `GOOGLE_CLIENT_ID`.  
-> `GOOGLE_CLIENT_ID` используется сервером для верификации Google-токенов.
+> `GOOGLE_CLIENT_ID` используется сервером для верификации Google-токенов и передаётся фронтенду как `VITE_GOOGLE_CLIENT_ID` через docker-compose в runtime — пересборка образа не требуется.
 
 ## Технологии
 
