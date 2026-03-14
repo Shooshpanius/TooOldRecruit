@@ -13,5 +13,7 @@ namespace My40kRoster.Server.Models
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public string UnitsJson { get; set; } = "[]";
         public bool AllowLegends { get; set; } = false;
+        // Название детачмента армии (необязательное поле)
+        public string? DetachmentName { get; set; }
     }
 }

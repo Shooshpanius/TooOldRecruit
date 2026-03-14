@@ -67,6 +67,7 @@ namespace My40kRoster.Server.Controllers
                     FactionName = r.FactionName,
                     PointsLimit = r.PointsLimit,
                     AllowLegends = r.AllowLegends,
+                    DetachmentName = r.DetachmentName,
                     CreatedAt = r.CreatedAt,
                     UpdatedAt = r.UpdatedAt
                 })
@@ -88,6 +89,7 @@ namespace My40kRoster.Server.Controllers
                 FactionName = roster.FactionName,
                 PointsLimit = roster.PointsLimit,
                 AllowLegends = roster.AllowLegends,
+                DetachmentName = roster.DetachmentName,
                 CreatedAt = roster.CreatedAt,
                 UpdatedAt = roster.UpdatedAt
             });
@@ -106,7 +108,8 @@ namespace My40kRoster.Server.Controllers
                 FactionId = request.FactionId,
                 FactionName = request.FactionName,
                 PointsLimit = request.PointsLimit,
-                AllowLegends = request.AllowLegends
+                AllowLegends = request.AllowLegends,
+                DetachmentName = string.IsNullOrWhiteSpace(request.DetachmentName) ? null : request.DetachmentName.Trim()
             };
             db.Rosters.Add(roster);
             await db.SaveChangesAsync();
@@ -118,6 +121,7 @@ namespace My40kRoster.Server.Controllers
                 FactionName = roster.FactionName,
                 PointsLimit = roster.PointsLimit,
                 AllowLegends = roster.AllowLegends,
+                DetachmentName = roster.DetachmentName,
                 CreatedAt = roster.CreatedAt,
                 UpdatedAt = roster.UpdatedAt
             };
@@ -137,6 +141,7 @@ namespace My40kRoster.Server.Controllers
             roster.Name = request.Name;
             roster.PointsLimit = request.PointsLimit;
             roster.AllowLegends = request.AllowLegends;
+            roster.DetachmentName = string.IsNullOrWhiteSpace(request.DetachmentName) ? null : request.DetachmentName.Trim();
             roster.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Ok(new RosterDto
@@ -147,6 +152,7 @@ namespace My40kRoster.Server.Controllers
                 FactionName = roster.FactionName,
                 PointsLimit = roster.PointsLimit,
                 AllowLegends = roster.AllowLegends,
+                DetachmentName = roster.DetachmentName,
                 CreatedAt = roster.CreatedAt,
                 UpdatedAt = roster.UpdatedAt
             });

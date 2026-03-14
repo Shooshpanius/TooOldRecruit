@@ -8,6 +8,8 @@ namespace My40kRoster.Server.DTOs
         public string FactionName { get; set; } = string.Empty;
         public int PointsLimit { get; set; }
         public bool AllowLegends { get; set; }
+        // Название детачмента армии (необязательное поле)
+        public string? DetachmentName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
@@ -19,6 +21,8 @@ namespace My40kRoster.Server.DTOs
         public string FactionName { get; set; } = string.Empty;
         public int PointsLimit { get; set; }
         public bool AllowLegends { get; set; } = false;
+        // Название детачмента армии (необязательное поле)
+        public string? DetachmentName { get; set; }
     }
 
     public class UpdateRosterRequest
@@ -26,5 +30,7 @@ namespace My40kRoster.Server.DTOs
         public string Name { get; set; } = string.Empty;
         public int PointsLimit { get; set; }
         public bool AllowLegends { get; set; }
+        // Название детачмента армии (необязательное поле)
+        public string? DetachmentName { get; set; }
     }
 }

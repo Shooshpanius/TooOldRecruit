@@ -12,6 +12,8 @@ export interface Roster {
   factionName: string;
   pointsLimit: number;
   allowLegends: boolean;
+  // Название детачмента армии (необязательное поле)
+  detachmentName?: string;
   createdAt: string;
   updatedAt: string;
 }
