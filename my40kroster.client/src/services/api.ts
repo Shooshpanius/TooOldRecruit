@@ -476,11 +476,16 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
           || node.catalogueId === UNALIGNED_FORCES_ID;
 
         if (node.entryType === 'unit' || node.entryType === 'model') {
+          // Пропускаем отряды/модели, скрытые по умолчанию и не разблокированные текущим детачментом.
+          // Например: «Cultist Firebrand» в Chaos Knights — доступен только при детачменте «Iconoclast Fiefdom».
+          if (node.hidden === true && !isUnlockedByDetachment(node, detachmentId)) continue;
           // Отряд или модель — добавляем в результат.
           // В children находится состав отряда, а не отдельные юниты → не рекурсируем.
           result.push(isAlliedSection ? { ...node, _isAllied: true } : node);
         } else if (isContainerItem(node)) {
           // Контейнерный узел (категория, раздел каталога, selectionEntryGroup) — рекурсируем.
+          // Если контейнер скрыт и не разблокирован детачментом — пропускаем его вместе с содержимым.
+          if (node.hidden === true && !isUnlockedByDetachment(node, detachmentId)) continue;
           result.push(...collectUnits(node.children!, isAlliedSection));
         }
         // Узлы типа "upgrade" и прочие пропускаем.
