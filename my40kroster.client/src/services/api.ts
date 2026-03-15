@@ -261,6 +261,24 @@ const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
   '347a-c7c2-1bc8-db33': [['efff-ac31-c7a5-93c6', 'fec1-2c41-7ea4-480e']],
 };
 
+// Резервная карта юнитов, доступных только при конкретном детачменте.
+// Используется, когда API не возвращает hidden=true + modifierGroup с условием скрытия
+// уровня roster для данного юнита (т.е. в поле modifierGroups нет группы с модификатором
+// {field:'hidden',value:'false'} и условием {scope:'roster',childId:detachmentId}).
+//
+// В BSData такое ограничение кодируется как <modifier type="set" field="hidden" value="false">
+// с <condition scope="roster" childId="<detachment-entry-id>"> непосредственно на записи юнита.
+// Поскольку текущий wh40kAPI экспортирует только BsDataModifierGroup уровня юнита
+// (таблица ModifierGroups), а не entry-level modifier-ы с roster-scope условиями,
+// динамическое обнаружение через isUnlockedByDetachment не работает для таких юнитов.
+//
+// Ключ — BSData GUID юнита, значение — массив BSData GUID допустимых детачментов (OR-логика).
+// Юнит отображается, если выбранный детачментId входит в список; иначе — скрыт.
+const DETACHMENT_EXCLUSIVE_UNITS: Record<string, string[]> = {
+  // Chaos Knights: «Cultist Firebrand» доступен только в детачменте «Iconoclast Fiefdom»
+  'cb66-af7-2cca-1c85': ['7fe8-de91-8976-e705'],
+};
+
 // Карта BSData GUID категорий → отображаемое имя.
 // Используется при разрешении модификаторов типа set-primary category, которые ссылаются
 // на BSData ID записи категории (categoryEntry), а не на текстовое имя.
