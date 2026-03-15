@@ -132,6 +132,30 @@ export async function getDetachments(factionId: string): Promise<Detachment[]> {
   }
 }
 
+// Условие детачмента для юнита, возвращаемое эндпоинтом /detachment-conditions.
+// unitId — BSData GUID юнита (targetId из entryLink в .cat-файле).
+// detachmentIds — список BSData GUID детачментов, при которых юнит доступен (OR-логика).
+export interface UnitDetachmentCondition {
+  unitId: string;
+  detachmentIds: string[];
+}
+
+// Загружает условия детачментов для юнитов фракции.
+// wh40kAPI разбирает entryLink-модификаторы из BSData .cat-файлов и возвращает
+// карту: для каждого юнита — список детачментов, при которых он доступен.
+// При ошибке или пока wh40kAPI не реализовал этот эндпоинт возвращает пустой массив —
+// клиент в этом случае использует статический DETACHMENT_EXCLUSIVE_UNITS как резервный источник.
+export async function getUnitDetachmentConditions(factionId: string): Promise<UnitDetachmentCondition[]> {
+  try {
+    const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/detachment-conditions`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? (data as UnitDetachmentCondition[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 interface ApiCostTier {
   id?: number;
   unitId?: string;
@@ -259,6 +283,44 @@ const CONTAINER_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
   'cf89-9b00-1708-2d59': [['30e9-da2c-e26b-fc20', 'a393-2cf0-b5f6-c624']],
   // Secutarii Peltasts [Legends]
   '347a-c7c2-1bc8-db33': [['efff-ac31-c7a5-93c6', 'fec1-2c41-7ea4-480e']],
+};
+
+// Резервная статическая карта юнитов, доступных только при конкретном детачменте.
+// Используется как fallback, когда сервер не может получить данные из BSData GitHub
+// (например, при недоступности сети или ошибке парсинга).
+//
+// Основной источник этих данных — эндпоинт /api/bsdata/fractions/{id}/detachment-conditions,
+// который читает BSData .cat-файлы напрямую из github.com/BSData/wh40k-10e.
+//
+// В BSData паттерн скрытия: <entryLink> → <modifier type="set" field="hidden" value="true">
+// + <condition type="lessThan" scope="roster" childId="<detachmentId>">.
+// Это означает «скрыть юнит, если указанный детачмент не выбран в ростере».
+//
+// Ключ — BSData GUID юнита (targetId из entryLink),
+// значение — массив BSData GUID детачментов, при которых юнит доступен (OR-логика).
+//
+// Chaos Knights: все юниты категории «Wretched Thralls» (ac7d-42cc-342b-c911)
+// доступны только в детачменте «Iconoclast Fiefdom» (7fe8-de91-8976-e705).
+// Источник: Chaos - Chaos Knights.cat (github.com/BSData/wh40k-10e)
+const DETACHMENT_EXCLUSIVE_UNITS: Record<string, string[]> = {
+  // ── Chaos Knights → Iconoclast Fiefdom only ──────────────────────────────
+  '1780-25b8-ce0b-898d': ['7fe8-de91-8976-e705'], // Dark Commune
+  'f69d-2171-5f95-9c88': ['7fe8-de91-8976-e705'], // Traitor Enforcer
+  '8dc5-4dcb-d77f-7d23': ['7fe8-de91-8976-e705'], // Traitor Guardsmen Squad
+  'e1c2-8417-403a-68':   ['7fe8-de91-8976-e705'], // Gellerpox Infected [Legends] (краткий GUID — сверен с BSData и API)
+  '6bf7-888c-7aa6-6831': ['7fe8-de91-8976-e705'], // Fellgor Beastmen
+  'cb66-af7-2cca-1c85':  ['7fe8-de91-8976-e705'], // Cultist Firebrand
+  '1267-78f1-7774-859':  ['7fe8-de91-8976-e705'], // Cultist Mob
+  '478-9d24-e5c8-c6f7':  ['7fe8-de91-8976-e705'], // Cultist Mob with Firearms [Legends]
+  'afed-8173-a1e0-cbae': ['7fe8-de91-8976-e705'], // Mutoid Vermin [Legends]
+  '9238-473a-54ee-6b0e': ['7fe8-de91-8976-e705'], // Negavolt Cultists [Legends]
+  '5b66-39e6-aeb5-8011': ['7fe8-de91-8976-e705'], // Renegade Enforcer [Legends]
+  '9df-7c70-84d2-e095':  ['7fe8-de91-8976-e705'], // Renegade Heavy Weapons Squad [Legends]
+  '658e-a63f-bac7-6201': ['7fe8-de91-8976-e705'], // Renegade Ogryn Beast Handler [Legends]
+  '23aa-b45a-6d5d-e92b': ['7fe8-de91-8976-e705'], // Accursed Cultists
+  '24c4-fa24-67ff-eef':  ['7fe8-de91-8976-e705'], // Renegade Ogryn Brutes [Legends]
+  'a7bb-ec24-40e6-5b8c': ['7fe8-de91-8976-e705'], // Renegade Plague Ogryns [Legends]
+  'c0f9-d16c-6caf-5b95': ['7fe8-de91-8976-e705'], // Rogue Psyker [Legends]
 };
 
 // Карта BSData GUID категорий → отображаемое имя.
@@ -445,9 +507,28 @@ function isContainerItem(item: ApiUnitItem): boolean {
 
 export async function getUnits(factionId: string, detachmentId?: string): Promise<Unit[]> {
   try {
-    const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`);
-    if (!res.ok) throw new Error('Failed to fetch units');
-    const data = await res.json();
+    // Загружаем дерево юнитов и условия детачментов параллельно.
+    // Условия детачментов: wh40kAPI разбирает entryLink-модификаторы из BSData .cat-файлов
+    // и возвращает карту unitId → detachmentIds[] для юнитов, скрытых по умолчанию.
+    // Пока wh40kAPI не реализовал этот эндпоинт, возвращается [] и используется
+    // статический DETACHMENT_EXCLUSIVE_UNITS как резервный источник данных.
+    const [data, serverConditions] = await Promise.all([
+      fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`).then(r => {
+        if (!r.ok) throw new Error('Failed to fetch units');
+        return r.json();
+      }),
+      getUnitDetachmentConditions(factionId),
+    ]);
+
+    // Строим итоговую карту условий: сначала данные от wh40kAPI, затем дополняем статическим fallback.
+    // wh40kAPI является основным источником (BSData данные); DETACHMENT_EXCLUSIVE_UNITS — запасной.
+    const detachmentMap: Record<string, string[]> = {};
+    for (const cond of serverConditions) {
+      if (cond.unitId) detachmentMap[cond.unitId] = cond.detachmentIds;
+    }
+    for (const [unitId, detIds] of Object.entries(DETACHMENT_EXCLUSIVE_UNITS)) {
+      if (!detachmentMap[unitId]) detachmentMap[unitId] = detIds;
+    }
 
     // Собираем отряды уровня «корень фракции»: узлы типа "unit" или "model".
     // Работает с двумя форматами ответа API:
@@ -477,8 +558,13 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
 
         if (node.entryType === 'unit' || node.entryType === 'model') {
           // Пропускаем отряды/модели, скрытые по умолчанию и не разблокированные текущим детачментом.
-          // Например: «Cultist Firebrand» в Chaos Knights — доступен только при детачменте «Iconoclast Fiefdom».
+          // (Механизм через modifierGroups в данных wh40kAPI — если API вернул hidden=true с условиями.)
           if (node.hidden === true && !isUnlockedByDetachment(node, detachmentId)) continue;
+          // Проверяем карту условий детачментов (данные из BSData .cat-файла или статический fallback).
+          // Юнит скрыт, если он есть в карте, но текущий детачмент не входит в список допустимых.
+          // Пример: Cultist Firebrand (cb66-af7-2cca-1c85) → только Iconoclast Fiefdom (7fe8-…).
+          const allowedDetachments = detachmentMap[node.id ?? ''];
+          if (allowedDetachments && (!detachmentId || !allowedDetachments.includes(detachmentId))) continue;
           // Отряд или модель — добавляем в результат.
           // В children находится состав отряда, а не отдельные юниты → не рекурсируем.
           result.push(isAlliedSection ? { ...node, _isAllied: true } : node);
