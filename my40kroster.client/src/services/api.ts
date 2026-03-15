@@ -331,7 +331,9 @@ const CATEGORY_GUID_NAMES: Record<string, string> = {
 };
 
 // Возвращает результирующие category и maxInRoster для узла с учётом активного детачмента.
-// Обрабатывает modifierGroups с условием scope="force" childId=detachmentId (выбор детачмента).
+// Обрабатывает modifierGroups с условием scope="force"|"roster" childId=detachmentId.
+// wh40kAPI экспортирует как <modifierGroup>, так и top-level <modifier> элементы selectionEntry
+// в виде modifierGroups (начиная с коммита Shooshpanius/wh40kAPI@1d56b37).
 // Поддерживаемые модификаторы:
 //   • type="set-primary" field="category" — смена категории (value — BSData GUID из CATEGORY_GUID_NAMES);
 //   • type="set" field=<GUID> value=<число> — замена maxInRoster (field — ID ограничения BSData).
@@ -341,57 +343,62 @@ function applyDetachmentModifiers(
   currentCategory: string,
   currentMaxInRoster: number | undefined,
 ): { category: string; maxInRoster: number | undefined } {
-  if (!detachmentId || !item.modifierGroups?.length) {
+  if (!detachmentId) {
     return { category: currentCategory, maxInRoster: currentMaxInRoster };
   }
 
   let category = currentCategory;
   let maxInRoster = currentMaxInRoster;
 
-  for (const group of item.modifierGroups) {
-    // Проверяем условия: нужна группа с условием scope="force" childId=detachmentId
-    let conditionMatches = false;
-    try {
-      if (group.conditions && typeof group.conditions === 'string') {
-        const conds = JSON.parse(group.conditions) as Array<{
-          scope?: string;
-          type?: string;
-          childId?: string;
-        }>;
-        conditionMatches = conds.some(
-          c => c.scope === 'force' && c.childId === detachmentId,
-        );
+  // Динамический путь через modifierGroups: применяем группы с условием scope="force"|"roster" childId=detachmentId.
+  if (item.modifierGroups?.length) {
+    for (const group of item.modifierGroups) {
+      // Проверяем условия: нужна группа с условием scope="force"|"roster" childId=detachmentId.
+      // scope="force" — условие в рамках текущей армии (force).
+      // scope="roster" — условие на уровне всего ростера.
+      let conditionMatches = false;
+      try {
+        if (group.conditions && typeof group.conditions === 'string') {
+          const conds = JSON.parse(group.conditions) as Array<{
+            scope?: string;
+            type?: string;
+            childId?: string;
+          }>;
+          conditionMatches = conds.some(
+            c => (c.scope === 'force' || c.scope === 'roster') && c.childId === detachmentId,
+          );
+        }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
-    }
-    if (!conditionMatches) continue;
+      if (!conditionMatches) continue;
 
-    // Применяем модификаторы
-    try {
-      if (group.modifiers && typeof group.modifiers === 'string') {
-        const mods = JSON.parse(group.modifiers) as Array<{
-          field?: string;
-          type?: string;
-          value?: string;
-        }>;
-        for (const mod of mods) {
-          if (mod.type === 'set-primary' && mod.field === 'category' && mod.value) {
-            const resolved = CATEGORY_GUID_NAMES[mod.value];
-            if (resolved) category = resolved;
-          } else if (mod.type === 'set' && mod.field && mod.value) {
-            // BSData constraint GUIDs имеют формат xxxxxxxx-xxxx-xxxx-xxxx (с дефисами).
-            // Обычные текстовые поля (hidden, name, annotation) дефисов не содержат.
-            const isBsdataConstraintGuid = /^[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$/.test(mod.field);
-            if (isBsdataConstraintGuid) {
-              const parsed = Number(mod.value);
-              if (isFinite(parsed)) maxInRoster = parsed;
+      // Применяем модификаторы
+      try {
+        if (group.modifiers && typeof group.modifiers === 'string') {
+          const mods = JSON.parse(group.modifiers) as Array<{
+            field?: string;
+            type?: string;
+            value?: string;
+          }>;
+          for (const mod of mods) {
+            if (mod.type === 'set-primary' && mod.field === 'category' && mod.value) {
+              const resolved = CATEGORY_GUID_NAMES[mod.value];
+              if (resolved) category = resolved;
+            } else if (mod.type === 'set' && mod.field && mod.value) {
+              // BSData constraint GUIDs имеют формат xxxxxxxx-xxxx-xxxx-xxxx (с дефисами).
+              // Обычные текстовые поля (hidden, name, annotation) дефисов не содержат.
+              const isBsdataConstraintGuid = /^[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$/.test(mod.field);
+              if (isBsdataConstraintGuid) {
+                const parsed = Number(mod.value);
+                if (isFinite(parsed)) maxInRoster = parsed;
+              }
             }
           }
         }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
     }
   }
 
