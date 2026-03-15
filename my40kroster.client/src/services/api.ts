@@ -477,6 +477,42 @@ function isHiddenByDetachment(item: ApiUnitItem, detachmentId: string | undefine
   return false;
 }
 
+// Возвращает ID детачмента, при выборе которого данная запись становится видимой,
+// или null если запись не имеет детачмент-условного скрытия.
+// Паттерн BSData: modifier[type=set, field=hidden, value=true] + condition[type=lessThan, scope=roster, childId=detachmentId].
+// Смысл: запись скрыта, когда указанный детачмент НЕ выбран в ростере.
+// Пример: "Houndpack Lance Character" скрывается без Houndpack Lance (6cb5-45cf-c626-fa86),
+// значит функция вернёт "6cb5-45cf-c626-fa86".
+function getRequiredDetachmentId(item: ApiUnitItem): string | null {
+  if (!item.modifierGroups?.length) return null;
+  for (const group of item.modifierGroups) {
+    let hasHideModifier = false;
+    try {
+      if (group.modifiers && typeof group.modifiers === 'string') {
+        const mods = JSON.parse(group.modifiers) as Array<{ field?: string; type?: string; value?: string }>;
+        hasHideModifier = mods.some(m => m.type === 'set' && m.field === 'hidden' && m.value === 'true');
+      }
+    } catch { continue; } // некорректный JSON в поле modifiers — пропускаем группу
+    if (!hasHideModifier) continue;
+    try {
+      if (group.conditions && typeof group.conditions === 'string') {
+        const conds = JSON.parse(group.conditions) as Array<{
+          scope?: string;
+          type?: string;
+          childId?: string;
+          field?: string;
+        }>;
+        for (const c of conds) {
+          if (c.type === 'lessThan' && c.scope === 'roster' && c.field === 'selections' && c.childId) {
+            return c.childId;
+          }
+        }
+      }
+    } catch { continue; } // некорректный JSON в поле conditions — пропускаем группу
+  }
+  return null;
+}
+
 // Динамически определяет XOR-группы из modifierGroups, которые возвращает API.
 // Паттерн BSData: modifier type="set" field="hidden" value="true" +
 //   condition type="atLeast" childId=<id сиблинга в том же контейнере>.
@@ -728,6 +764,38 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
         }
       }
 
+      // Извлекаем детачмент-зависимые апгрейды из дочерних записей (только на корневом уровне).
+      // Апгрейд является «детачмент-зависимым», если у него есть модификатор скрытия с условием
+      // «данного детачмента нет в ростере» (type=lessThan, scope=roster, childId=<detachmentId>)
+      // и текущий выбранный детачмент совпадает с этим условием (т.е. апгрейд сейчас видим).
+      // Пример: «Houndpack Lance Character» у War Dog при Houndpack Lance.
+      // Такие апгрейды отображаются как чекбоксы на карточке отряда в ростере.
+      let detachmentUpgrades: Array<{ id: string; name: string; minInRoster?: number; maxInRoster?: number }> | undefined;
+      if (depth === 0 && detachmentId && Array.isArray(item.children)) {
+        const extracted = item.children
+          .filter(child =>
+            child.entryType === 'upgrade' &&
+            child.hidden !== true &&
+            getRequiredDetachmentId(child) === detachmentId
+          )
+          .map(child => ({
+            id: child.id ?? child.name ?? '',
+            name: child.name ?? '',
+            minInRoster: child.minInRoster != null ? toNum(child.minInRoster) : undefined,
+            maxInRoster: child.maxInRoster != null ? toNum(child.maxInRoster) : undefined,
+          }));
+        if (extracted.length > 0) {
+          detachmentUpgrades = extracted;
+          // minInRoster для юнита — максимальное из roster-wide min-ограничений апгрейдов.
+          // Семантика: чтобы взять N обязательных апгрейдов, нужно минимум N таких отрядов.
+          // Применяется только если requiredUpgrades не уже задал minInRoster.
+          const upgradeMin = extracted.reduce((m, u) => Math.max(m, u.minInRoster ?? 0), 0);
+          if (upgradeMin > 0) {
+            minInRoster = Math.max(minInRoster ?? 0, upgradeMin);
+          }
+        }
+      }
+
       // Парсим встроенные диапазоны стоимости (из unitsTree)
       const rawTiers = item.costTiers ?? item.tiers;
       const hasVariableCost = Array.isArray(rawTiers) && rawTiers.length > 0;
@@ -925,6 +993,7 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
         entryType,
         models: models && models.length > 0 ? models : undefined,
         isAllied: item._isAllied === true,
+        detachmentUpgrades: detachmentUpgrades && detachmentUpgrades.length > 0 ? detachmentUpgrades : undefined,
       };
     };
 

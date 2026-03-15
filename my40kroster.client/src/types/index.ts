@@ -31,6 +31,17 @@ export interface UnitCostBand {
   cost: number;
 }
 
+// Детачмент-зависимая опция (апгрейд с чекбоксом), доступная при выборе конкретного детачмента.
+// Пример: «Houndpack Lance Character» для War Dog при детачменте Houndpack Lance.
+export interface UnitDetachmentUpgrade {
+  id: string;
+  name: string;
+  // Минимальное количество выбранных экземпляров данного апгрейда в ростере (roster-wide)
+  minInRoster?: number;
+  // Максимальное количество выбранных экземпляров данного апгрейда в ростере (roster-wide)
+  maxInRoster?: number;
+}
+
 export interface Unit {
   id: string;
   name: string;
@@ -63,6 +74,13 @@ export interface Unit {
   // Источник: динамически из modifierGroups API (deriveXorGroups в api.ts) или, если API ещё не
   // возвращает modifierGroups, из резервной таблицы CONTAINER_EXCLUSIVE_GROUPS в api.ts.
   exclusiveGroup?: string;
+  // Детачмент-зависимые опции (апгрейды с чекбоксами), доступные при текущем детачменте.
+  // Заполняется в api.ts из дочерних upgrade-записей с детачмент-условным скрытием.
+  // Пример: «Houndpack Lance Character» у War Dog при Houndpack Lance.
+  detachmentUpgrades?: UnitDetachmentUpgrade[];
+  // IDs выбранных детачмент-апгрейдов для данного юнита в ростере.
+  // Сохраняется в составе данных ростера.
+  selectedUpgradeIds?: string[];
 }
 
 export interface RosterUnit extends Unit {

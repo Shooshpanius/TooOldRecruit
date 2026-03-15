@@ -678,6 +678,55 @@ body {
   white-space: nowrap;
 }
 
+/* Секция детачмент-зависимых апгрейдов (чекбоксов) на карточке отряда */
+.unit-detachment-upgrades {
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.unit-detachment-upgrade {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.unit-detachment-upgrade-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.unit-detachment-upgrade-label input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--gold, #c9a84c);
+  cursor: pointer;
+}
+
+.unit-detachment-upgrade-label input[type="checkbox"]:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Счётчик выбранных апгрейдов в ростере (X/max), например 2/3 */
+.unit-upgrade-roster-count {
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+}
+
+/* Ошибка: количество не соответствует требованиям min/max */
+.unit-upgrade-roster-count--error {
+  color: var(--danger, #e53e3e);
+  font-weight: 600;
+}
+
 /* Контрол выбора количества моделей */
 .unit-model-count {
   display: flex;

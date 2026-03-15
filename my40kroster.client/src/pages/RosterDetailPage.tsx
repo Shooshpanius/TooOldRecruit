@@ -1242,6 +1242,54 @@ export function RosterDetailPage() {
                         </ul>
                       );
                     })()}
+                  {/* Детачмент-зависимые апгрейды (чекбоксы) — например, «Houndpack Lance Character» для War Dog */}
+                  {primaryUnit.detachmentUpgrades && primaryUnit.detachmentUpgrades.length > 0 && (
+                    <div className="unit-detachment-upgrades">
+                      {primaryUnit.detachmentUpgrades.map(upgrade => {
+                        const isSelected = primaryUnit.selectedUpgradeIds?.includes(upgrade.id) ?? false;
+                        // Считаем суммарное количество выбранных экземпляров этого апгрейда по всему ростеру.
+                        // Все юниты (любого типа) с этим апгрейдом в selectedUpgradeIds учитываются.
+                        const totalSelected = unitGroups.reduce((sum, g) =>
+                          sum + g.units.filter(u => u.selectedUpgradeIds?.includes(upgrade.id)).length, 0
+                        );
+                        const atMax = upgrade.maxInRoster !== undefined && totalSelected >= upgrade.maxInRoster;
+                        const minOk = upgrade.minInRoster === undefined || totalSelected >= upgrade.minInRoster;
+                        const maxOk = upgrade.maxInRoster === undefined || totalSelected <= upgrade.maxInRoster;
+
+                        const handleToggle = (checked: boolean) => {
+                          const newSelected = checked
+                            ? [...(primaryUnit.selectedUpgradeIds ?? []), upgrade.id]
+                            : (primaryUnit.selectedUpgradeIds ?? []).filter(id => id !== upgrade.id);
+                          const updated = unitGroups.map(g => g.id === group.id
+                            ? { ...g, units: g.units.map((u, idx) => idx === 0 ? { ...u, selectedUpgradeIds: newSelected } : u) }
+                            : g
+                          );
+                          setUnitGroups(updated);
+                          persistUnits(updated);
+                        };
+
+                        return (
+                          <div key={upgrade.id} className="unit-detachment-upgrade">
+                            <label className="unit-detachment-upgrade-label">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={!isSelected && atMax}
+                                onChange={e => handleToggle(e.target.checked)}
+                                aria-label={upgrade.name}
+                              />
+                              {upgrade.name}
+                            </label>
+                            {(upgrade.minInRoster !== undefined || upgrade.maxInRoster !== undefined) && (
+                              <span className={`unit-upgrade-roster-count${(!minOk || !maxOk) ? ' unit-upgrade-roster-count--error' : ''}`}>
+                                {totalSelected}/{upgrade.maxInRoster ?? upgrade.minInRoster}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   </div>
                   );
                 })}
