@@ -349,7 +349,7 @@ export function RosterDetailPage() {
   const [pointsLimit, setPointsLimit] = useState(roster?.pointsLimit || 2000);
   const [allowLegends, setAllowLegends] = useState(roster?.allowLegends ?? false);
   const [detachmentName, setDetachmentName] = useState(roster?.detachmentName || '');
-  const [detachments, setDetachments] = useState<string[]>([]);
+  const [detachments, setDetachments] = useState<api.Detachment[]>([]);
   const [saving, setSaving] = useState(false);
   const [unitAddTarget, setUnitAddTarget] = useState<{ groupId: string | null }>({ groupId: null });
   const [addingUnit, setAddingUnit] = useState(false);
@@ -377,11 +377,13 @@ export function RosterDetailPage() {
     }
   }, [id, token]);
 
-  // Загружаем список детачментов для фракции при открытии режима редактирования
+  // Загружаем список детачментов для фракции при загрузке ростера.
+  // Детачменты нужны как при редактировании настроек, так и при добавлении юнитов
+  // (для фильтрации детачмент-зависимых записей в buildChildTree).
   useEffect(() => {
-    if (!editing || !roster?.factionId) return;
+    if (!roster?.factionId) return;
     api.getDetachments(roster.factionId).then(setDetachments).catch((err) => { console.error('Failed to load detachments:', err); setDetachments([]); });
-  }, [editing, roster?.factionId]);
+  }, [roster?.factionId]);
 
   const persistUnits = useCallback((groups: UnitGroup[]) => {
     if (!id) return;
@@ -484,7 +486,7 @@ export function RosterDetailPage() {
               >
                 <option value="">— не выбран —</option>
                 {detachments.map(d => (
-                  <option key={d} value={d}>{d}</option>
+                  <option key={d.id ? `id:${d.id}` : `name:${d.name}`} value={d.name}>{d.name}</option>
                 ))}
               </select>
             </div>
@@ -1255,6 +1257,7 @@ export function RosterDetailPage() {
               remainingPoints={remainingPoints}
               currentUnitGroups={unitGroups}
               allowLegends={roster.allowLegends ?? false}
+              detachmentId={detachments.find(d => d.name === roster.detachmentName)?.id}
               onAdd={unit => {
                 const rosterUnit: RosterUnit = { ...unit, entryId: crypto.randomUUID() };
                 let updated: UnitGroup[];

@@ -12,6 +12,8 @@ interface AddUnitModalProps {
   // Текущие отряды в ростере — нужны для проверки лимита maxInRoster
   currentUnitGroups?: UnitGroup[];
   allowLegends?: boolean;
+  // Идентификатор выбранного детачмента — используется для фильтрации скрытых записей в деревеюнитов
+  detachmentId?: string;
 }
 
 function getCostForModelCount(bands: UnitCostBand[], count: number): number {
@@ -310,7 +312,7 @@ function calcEffectiveMax(
   return Math.min(modelMaxInRoster ?? maxTotal, maxTotal - otherTotal);
 }
 
-export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups, allowLegends }: AddUnitModalProps) {
+export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMode, remainingPoints, currentUnitGroups, allowLegends, detachmentId }: AddUnitModalProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [openType, setOpenType] = useState<string | null>(null);
@@ -318,13 +320,13 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
   const [modelCounts, setModelCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    getUnits(factionId).then(data => {
+    getUnits(factionId, detachmentId).then(data => {
       setUnits(data);
       setLoading(false);
     }).catch(() => {
       setLoading(false);
     });
-  }, [factionId]);
+  }, [factionId, detachmentId]);
 
   const filteredUnits = attachMode ? units.filter(u => u.isLeader) : units;
 
