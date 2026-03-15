@@ -330,8 +330,72 @@ const CATEGORY_GUID_NAMES: Record<string, string> = {
   'e338-111e-d0c6-b687': 'Battleline',
 };
 
+// Резервная статическая карта изменений категории и лимита юнитов при выборе детачмента.
+// Используется как fallback для BSData паттерна, когда wh40kAPI НЕ экспортирует top-level
+// <modifier> элементы selectionEntry (он экспортирует только <modifierGroup>).
+//
+// BSData паттерн (НЕ поддерживаемый wh40kAPI /unitsTree):
+//   <modifier type="set-primary" value="<categoryGUID>" field="category">
+//     <conditions>
+//       <condition type="atLeast" scope="roster" childId="<detachmentId>"/>
+//     </conditions>
+//   </modifier>
+//
+// Для сравнения, World Eaters (Goremongers/Jakhals + Cult of Blood) используют <modifierGroup> —
+// их данные уже корректно экспортируются API и обрабатываются динамически без fallback.
+//
+// Ключ первого уровня — BSData GUID детачмента.
+// Ключ второго уровня — BSData GUID юнита.
+// Значение — переопределения category и/или maxInRoster при активном детачменте.
+//
+// Задача для wh40kAPI: добавить экспорт top-level entry-level модификаторов selectionEntry
+// в поле entryModifiers ответа /fractions/{id}/unitsTree.
+// Репозиторий wh40kAPI: https://github.com/Shooshpanius/wh40kAPI
+const DETACHMENT_UNIT_OVERRIDES: Record<string, Record<string, { category?: string; maxInRoster?: number }>> = {
+  // ── Chaos Knights → Houndpack Lance (6cb5-45cf-c626-fa86) ─────────────────────────
+  // Все юниты War Dog становятся Battleline, лимит увеличивается с 3 до 6
+  // (правило детачмента: в армии должно быть не менее 3 юнитов War Dog).
+  // BSData (Chaos - Chaos Knights Library.cat):
+  //   modifier type="set-primary" value="e338-111e-d0c6-b687" scope="roster" childId="6cb5-45cf-c626-fa86"
+  //   modifier type="set" value="6" field="<force-scope-max-constraint-id>"
+  '6cb5-45cf-c626-fa86': {
+    '8df0-fc3c-8ced-ffce': { category: 'Battleline', maxInRoster: 6 }, // War Dog Executioner
+    '753d-4e02-eda3-4809': { category: 'Battleline', maxInRoster: 6 }, // War Dog Brigand
+    'bbc6-c0ed-24e8-86b7': { category: 'Battleline', maxInRoster: 6 }, // War Dog Stalker
+    'e96b-ac98-7fd2-a155': { category: 'Battleline', maxInRoster: 6 }, // War Dog Karnivore
+    '6e6d-7950-ce6d-4cd4': { category: 'Battleline', maxInRoster: 6 }, // War Dog Huntsman
+    'ae7c-3679-a88-6895':  { category: 'Battleline', maxInRoster: 6 }, // War Dog Moirax
+  },
+  // ── Space Marines → Company of Hunters (41e6-d47c-5e68-e066) ──────────────────────
+  // Outrider Squad становится Battleline, лимит увеличивается с 3 до 6.
+  // BSData (Imperium - Space Marines.cat):
+  //   modifier type="set-primary" value="e338-111e-d0c6-b687" scope="force" childId="41e6-d47c-5e68-e066"
+  '41e6-d47c-5e68-e066': {
+    'b5e8-c34b-566b-8bda': { category: 'Battleline', maxInRoster: 6 }, // Outrider Squad
+  },
+  // ── Orks → Dread Mob (807c-9732-5465-5ca5) ────────────────────────────────────────
+  // Gretchin становятся Battleline, лимит увеличивается с 3 до 6.
+  // BSData (Orks.cat):
+  //   modifier type="set-primary" value="e338-111e-d0c6-b687" scope="roster" childId="807c-9732-5465-5ca5"
+  '807c-9732-5465-5ca5': {
+    'de8f-24f9-c543-92b7': { category: 'Battleline', maxInRoster: 6 }, // Gretchin
+  },
+  // ── Orks → Taktikal Brigade (fdd5-9868-a9ee-e9f1) ─────────────────────────────────
+  // Stormboyz становятся Battleline, лимит увеличивается с 3 до 6.
+  // BSData (Orks.cat):
+  //   modifier type="set-primary" value="e338-111e-d0c6-b687" scope="force" childId="fdd5-9868-a9ee-e9f1"
+  'fdd5-9868-a9ee-e9f1': {
+    '4adf-8249-c6b2-dd4f': { category: 'Battleline', maxInRoster: 6 }, // Stormboyz
+  },
+};
+
 // Возвращает результирующие category и maxInRoster для узла с учётом активного детачмента.
-// Обрабатывает modifierGroups с условием scope="force" childId=detachmentId (выбор детачмента).
+// Шаг 1 (динамический): обрабатывает modifierGroups с условием scope="force"|"roster" childId=detachmentId.
+//   Применяется к фракциям, использующим <modifierGroup> в BSData (например, World Eaters).
+// Шаг 2 (статический fallback): DETACHMENT_UNIT_OVERRIDES — для случаев, когда wh40kAPI
+//   не экспортирует top-level entry-level модификаторы selectionEntry (только <modifierGroup>).
+//   Применяется к Chaos Knights (War Dogs + Houndpack Lance), Space Marines (Outrider Squad),
+//   Orks (Gretchin, Stormboyz).
 // Поддерживаемые модификаторы:
 //   • type="set-primary" field="category" — смена категории (value — BSData GUID из CATEGORY_GUID_NAMES);
 //   • type="set" field=<GUID> value=<число> — замена maxInRoster (field — ID ограничения BSData).
@@ -341,57 +405,78 @@ function applyDetachmentModifiers(
   currentCategory: string,
   currentMaxInRoster: number | undefined,
 ): { category: string; maxInRoster: number | undefined } {
-  if (!detachmentId || !item.modifierGroups?.length) {
+  if (!detachmentId) {
     return { category: currentCategory, maxInRoster: currentMaxInRoster };
   }
 
   let category = currentCategory;
   let maxInRoster = currentMaxInRoster;
 
-  for (const group of item.modifierGroups) {
-    // Проверяем условия: нужна группа с условием scope="force" childId=detachmentId
-    let conditionMatches = false;
-    try {
-      if (group.conditions && typeof group.conditions === 'string') {
-        const conds = JSON.parse(group.conditions) as Array<{
-          scope?: string;
-          type?: string;
-          childId?: string;
-        }>;
-        conditionMatches = conds.some(
-          c => c.scope === 'force' && c.childId === detachmentId,
-        );
+  // Шаг 1: динамический путь через modifierGroups (World Eaters и другие, где BSData использует <modifierGroup>).
+  if (item.modifierGroups?.length) {
+    for (const group of item.modifierGroups) {
+      // Проверяем условия: нужна группа с условием scope="force"|"roster" childId=detachmentId.
+      // scope="force" — условие в рамках текущей армии (force).
+      // scope="roster" — условие на уровне всего ростера.
+      let conditionMatches = false;
+      try {
+        if (group.conditions && typeof group.conditions === 'string') {
+          const conds = JSON.parse(group.conditions) as Array<{
+            scope?: string;
+            type?: string;
+            childId?: string;
+          }>;
+          conditionMatches = conds.some(
+            c => (c.scope === 'force' || c.scope === 'roster') && c.childId === detachmentId,
+          );
+        }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
-    }
-    if (!conditionMatches) continue;
+      if (!conditionMatches) continue;
 
-    // Применяем модификаторы
-    try {
-      if (group.modifiers && typeof group.modifiers === 'string') {
-        const mods = JSON.parse(group.modifiers) as Array<{
-          field?: string;
-          type?: string;
-          value?: string;
-        }>;
-        for (const mod of mods) {
-          if (mod.type === 'set-primary' && mod.field === 'category' && mod.value) {
-            const resolved = CATEGORY_GUID_NAMES[mod.value];
-            if (resolved) category = resolved;
-          } else if (mod.type === 'set' && mod.field && mod.value) {
-            // BSData constraint GUIDs имеют формат xxxxxxxx-xxxx-xxxx-xxxx (с дефисами).
-            // Обычные текстовые поля (hidden, name, annotation) дефисов не содержат.
-            const isBsdataConstraintGuid = /^[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$/.test(mod.field);
-            if (isBsdataConstraintGuid) {
-              const parsed = Number(mod.value);
-              if (isFinite(parsed)) maxInRoster = parsed;
+      // Применяем модификаторы
+      try {
+        if (group.modifiers && typeof group.modifiers === 'string') {
+          const mods = JSON.parse(group.modifiers) as Array<{
+            field?: string;
+            type?: string;
+            value?: string;
+          }>;
+          for (const mod of mods) {
+            if (mod.type === 'set-primary' && mod.field === 'category' && mod.value) {
+              const resolved = CATEGORY_GUID_NAMES[mod.value];
+              if (resolved) category = resolved;
+            } else if (mod.type === 'set' && mod.field && mod.value) {
+              // BSData constraint GUIDs имеют формат xxxxxxxx-xxxx-xxxx-xxxx (с дефисами).
+              // Обычные текстовые поля (hidden, name, annotation) дефисов не содержат.
+              const isBsdataConstraintGuid = /^[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$/.test(mod.field);
+              if (isBsdataConstraintGuid) {
+                const parsed = Number(mod.value);
+                if (isFinite(parsed)) maxInRoster = parsed;
+              }
             }
           }
         }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
+    }
+  }
+
+  // Шаг 2: статический fallback через DETACHMENT_UNIT_OVERRIDES.
+  // Применяется для Chaos Knights (War Dogs + Houndpack Lance) и других фракций,
+  // где wh40kAPI не экспортирует top-level entry modifiers из BSData selectionEntry.
+  // Применяется поверх динамического пути — если API когда-нибудь добавит эти данные
+  // в modifierGroups, оба пути вернут одинаковый результат.
+  if (item.id) {
+    const overridesForDetachment = DETACHMENT_UNIT_OVERRIDES[detachmentId];
+    if (overridesForDetachment) {
+      const override = overridesForDetachment[item.id];
+      if (override) {
+        if (override.category !== undefined) category = override.category;
+        if (override.maxInRoster !== undefined) maxInRoster = override.maxInRoster;
+      }
     }
   }
 
