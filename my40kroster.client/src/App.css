@@ -671,6 +671,13 @@ body {
   font-weight: 600;
 }
 
+/* Метка минимально необходимого количества отрядов в ростере (детачмент-зависимое) */
+.unit-roster-min {
+  font-size: 0.75rem;
+  color: var(--warning, #d69e2e);
+  white-space: nowrap;
+}
+
 /* Контрол выбора количества моделей */
 .unit-model-count {
   display: flex;

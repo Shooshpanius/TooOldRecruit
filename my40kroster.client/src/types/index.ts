@@ -39,6 +39,8 @@ export interface Unit {
   isLeader?: boolean;
   // Максимальное количество отрядов данного типа в ростере (из API)
   maxInRoster?: number;
+  // Минимальное количество отрядов данного типа в ростере (из API или статического fallback)
+  minInRoster?: number;
   // Диапазоны стоимости в зависимости от количества моделей
   costBands?: UnitCostBand[];
   // Выбранное количество моделей

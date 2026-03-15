@@ -428,6 +428,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   {inRoster}/{unit.maxInRoster}
                 </span>
               )}
+              {unit.minInRoster !== undefined && (
+                <span className="unit-roster-min" title="Минимальное количество в ростере">
+                  мин. {unit.minInRoster}
+                </span>
+              )}
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => onAdd({
@@ -602,6 +607,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   {inRoster}/{unit.maxInRoster}
                 </span>
               )}
+              {unit.minInRoster !== undefined && (
+                <span className="unit-roster-min" title="Минимальное количество в ростере">
+                  мин. {unit.minInRoster}
+                </span>
+              )}
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => onAdd({
@@ -762,6 +772,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
                   {inRoster}/{unit.maxInRoster}
                 </span>
               )}
+              {unit.minInRoster !== undefined && (
+                <span className="unit-roster-min" title="Минимальное количество в ростере">
+                  мин. {unit.minInRoster}
+                </span>
+              )}
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => onAdd({
@@ -894,6 +909,11 @@ export function AddUnitModal({ factionId, factionName, onClose, onAdd, attachMod
               {unit.maxInRoster !== undefined && (
                 <span className={`unit-roster-count${limitReached ? ' unit-roster-count--limit' : ''}`}>
                   {inRoster}/{unit.maxInRoster}
+                </span>
+              )}
+              {unit.minInRoster !== undefined && (
+                <span className="unit-roster-min" title="Минимальное количество в ростере">
+                  мин. {unit.minInRoster}
                 </span>
               )}
               <button
