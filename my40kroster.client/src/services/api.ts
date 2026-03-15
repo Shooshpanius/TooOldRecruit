@@ -364,7 +364,7 @@ const DETACHMENT_UNIT_OVERRIDES: Record<string, Record<string, { category?: stri
     'bbc6-c0ed-24e8-86b7': { category: 'Battleline', maxInRoster: 6 }, // War Dog Stalker
     'e96b-ac98-7fd2-a155': { category: 'Battleline', maxInRoster: 6 }, // War Dog Karnivore
     '6e6d-7950-ce6d-4cd4': { category: 'Battleline', maxInRoster: 6 }, // War Dog Huntsman
-    'ae7c-3679-a88-6895':  { category: 'Battleline', maxInRoster: 6 }, // War Dog Moirax
+    'ae7c-3679-a88-6895': { category: 'Battleline', maxInRoster: 6 }, // War Dog Moirax
   },
   // ── Space Marines → Company of Hunters (41e6-d47c-5e68-e066) ──────────────────────
   // Outrider Squad становится Battleline, лимит увеличивается с 3 до 6.
