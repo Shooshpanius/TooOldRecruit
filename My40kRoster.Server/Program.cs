@@ -76,18 +76,6 @@ builder.Services.AddHttpClient("wh40kapi", client =>
     client.BaseAddress = new Uri("https://api.wh40kcards.ru/api/bsdata/");
 });
 
-// HttpClient для чтения BSData .cat-файлов напрямую из GitHub.
-// Используется эндпоинтом /fractions/{id}/detachment-conditions для получения
-// условий скрытия юнитов, которые wh40kAPI не экспортирует (entryLink-модификаторы).
-builder.Services.AddHttpClient("bsdata-github", client =>
-{
-    client.BaseAddress = new Uri("https://raw.githubusercontent.com/BSData/wh40k-10e/main/");
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("TooOldRecruit-Server/1.0");
-});
-
-// Кэш для хранения распарсенных BSData-данных (имена каталогов, условия детачментов).
-builder.Services.AddMemoryCache();
-
 var app = builder.Build();
 
 // Создаём схему БД при первом запуске и применяем недостающие столбцы

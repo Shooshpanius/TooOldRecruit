@@ -141,9 +141,10 @@ export interface UnitDetachmentCondition {
 }
 
 // Загружает условия детачментов для юнитов фракции.
-// Сервер парсит BSData .cat-файл из github.com/BSData/wh40k-10e и извлекает
-// entryLink-модификаторы скрытия (type="set" field="hidden" value="true" scope="roster").
-// При ошибке возвращает пустой массив — клиент использует статический DETACHMENT_EXCLUSIVE_UNITS.
+// wh40kAPI разбирает entryLink-модификаторы из BSData .cat-файлов и возвращает
+// карту: для каждого юнита — список детачментов, при которых он доступен.
+// При ошибке или пока wh40kAPI не реализовал этот эндпоинт возвращает пустой массив —
+// клиент в этом случае использует статический DETACHMENT_EXCLUSIVE_UNITS как резервный источник.
 export async function getUnitDetachmentConditions(factionId: string): Promise<UnitDetachmentCondition[]> {
   try {
     const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/detachment-conditions`);
@@ -507,9 +508,10 @@ function isContainerItem(item: ApiUnitItem): boolean {
 export async function getUnits(factionId: string, detachmentId?: string): Promise<Unit[]> {
   try {
     // Загружаем дерево юнитов и условия детачментов параллельно.
-    // Условия детачментов: сервер парсит BSData .cat-файл и возвращает карту
-    // unitId → detachmentIds[] для юнитов с entryLink-модификаторами скрытия.
-    // При ошибке /detachment-conditions используется статический DETACHMENT_EXCLUSIVE_UNITS.
+    // Условия детачментов: wh40kAPI разбирает entryLink-модификаторы из BSData .cat-файлов
+    // и возвращает карту unitId → detachmentIds[] для юнитов, скрытых по умолчанию.
+    // Пока wh40kAPI не реализовал этот эндпоинт, возвращается [] и используется
+    // статический DETACHMENT_EXCLUSIVE_UNITS как резервный источник данных.
     const [data, serverConditions] = await Promise.all([
       fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`).then(r => {
         if (!r.ok) throw new Error('Failed to fetch units');
@@ -518,8 +520,8 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
       getUnitDetachmentConditions(factionId),
     ]);
 
-    // Строим итоговую карту условий: сначала данные с сервера, затем дополняем статическим fallback.
-    // Сервер является основным источником (BSData GitHub), fallback — запасной.
+    // Строим итоговую карту условий: сначала данные от wh40kAPI, затем дополняем статическим fallback.
+    // wh40kAPI является основным источником (BSData данные); DETACHMENT_EXCLUSIVE_UNITS — запасной.
     const detachmentMap: Record<string, string[]> = {};
     for (const cond of serverConditions) {
       if (cond.unitId) detachmentMap[cond.unitId] = cond.detachmentIds;
