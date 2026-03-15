@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRosters } from '../contexts/RosterContext';
 import { getFactions, getDetachments } from '../services/api';
+import type { Detachment } from '../services/api';
 import type { Faction } from '../types';
 
 const POINTS_OPTIONS = [500, 1000, 1500, 2000, 2500];
@@ -20,7 +21,7 @@ export function CreateRosterPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [detachmentName, setDetachmentName] = useState('');
-  const [detachments, setDetachments] = useState<string[]>([]);
+  const [detachments, setDetachments] = useState<Detachment[]>([]);
   const [loadingDetachments, setLoadingDetachments] = useState(false);
 
   useEffect(() => {
@@ -177,7 +178,7 @@ export function CreateRosterPage() {
               >
                 <option value="">— не выбран —</option>
                 {detachments.map(d => (
-                  <option key={d} value={d}>{d}</option>
+                  <option key={d.id ? `id:${d.id}` : `name:${d.name}`} value={d.name}>{d.name}</option>
                 ))}
               </select>
             ) : (

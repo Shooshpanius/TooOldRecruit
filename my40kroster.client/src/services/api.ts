@@ -105,14 +105,28 @@ export async function getFactions(): Promise<Faction[]> {
   }
 }
 
+// Детачмент с идентификатором — возвращается эндпоинтом /detachments после обновления wh40kAPI.
+export interface Detachment {
+  id: string;
+  name: string;
+}
+
 // Загружает список детачментов для выбранной фракции через прокси-эндпоинт.
+// API возвращает {id, name}[] (после обновления wh40kAPI).
+// Поддерживается устаревший формат string[] (id будет пустой строкой).
 // Возвращает пустой массив если фракция не поддерживает детачменты или API недоступен.
-export async function getDetachments(factionId: string): Promise<string[]> {
+export async function getDetachments(factionId: string): Promise<Detachment[]> {
   try {
     const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/detachments`);
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const arr = Array.isArray(data) ? data : [];
+    if (arr.length === 0) return [];
+    // Поддерживаем устаревший формат string[] наряду с новым {id, name}[]
+    if (typeof arr[0] === 'string') {
+      return (arr as string[]).map(name => ({ id: '', name }));
+    }
+    return arr as Detachment[];
   } catch {
     return [];
   }
@@ -171,6 +185,9 @@ interface ApiUnitItem {
   catalogueId?: string;
   // Внутренний флаг: юнит получен из раздела «Allied Units» связанного каталога
   _isAllied?: boolean;
+  // Флаг скрытия по умолчанию (из BSData): true = запись скрыта до применения условных модификаторов.
+  // Добавлено в ответ /fractions/{id}/unitsTree после обновления wh40kAPI.
+  hidden?: boolean;
   // Группы модификаторов из BSData — могут кодировать условия скрытия (XOR-взаимоисключение).
   // Поле присутствует в ответе API (обновлено в wh40kAPI), но содержит только BsDataModifierGroup
   // уровня юнита (Crusade и т.п.) — НЕ содержит XOR-модификаторов отдельных entry-нод.
@@ -317,6 +334,30 @@ function deriveXorGroups(children: ApiUnitItem[]): string[][] {
   return [...components.values()].filter(g => g.length > 1);
 }
 
+// Возвращает true, если скрытая запись разблокируется для указанного детачмента.
+// Проверяет modifierGroups: ищет группу с модификатором {field:'hidden', value:'false'}
+// и условием {scope:'roster', childId: detachmentId}.
+function isUnlockedByDetachment(item: ApiUnitItem, detachmentId: string | undefined): boolean {
+  if (!detachmentId || !item.modifierGroups?.length) return false;
+  for (const group of item.modifierGroups) {
+    let hasUnhideModifier = false;
+    try {
+      if (group.modifiers && typeof group.modifiers === 'string') {
+        const mods = JSON.parse(group.modifiers) as Array<{ field?: string; type?: string; value?: string }>;
+        hasUnhideModifier = mods.some(m => m.type === 'set' && m.field === 'hidden' && m.value === 'false');
+      }
+    } catch { continue; } // некорректный JSON в поле modifiers — пропускаем группу
+    if (!hasUnhideModifier) continue;
+    try {
+      if (group.conditions && typeof group.conditions === 'string') {
+        const conds = JSON.parse(group.conditions) as Array<{ scope?: string; childId?: string }>;
+        if (conds.some(c => c.scope === 'roster' && c.childId === detachmentId)) return true;
+      }
+    } catch { continue; } // некорректный JSON в поле conditions — пропускаем группу
+  }
+  return false;
+}
+
 // Возвращает true, если узел является промежуточным контейнером (не unit/model/upgrade).
 // API wh40kcards.ru исторически использовал entryType=null, а после обновления — entryType="selectionEntryGroup".
 // Оба варианта нужно обрабатывать одинаково: рекурсировать вглубь дочерних узлов.
@@ -327,7 +368,7 @@ function isContainerItem(item: ApiUnitItem): boolean {
     && item.children.length > 0;
 }
 
-export async function getUnits(factionId: string): Promise<Unit[]> {
+export async function getUnits(factionId: string, detachmentId?: string): Promise<Unit[]> {
   try {
     const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`);
     if (!res.ok) throw new Error('Failed to fetch units');
@@ -459,7 +500,9 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         // «Значимые» контейнеры — только те, у которых есть явные min/maxInRoster.
         // Кампанийные контейнеры (например «Crusade», без ограничений) не учитываются:
         // их наличие не должно блокировать создание синтетического контейнера.
-        const directModelChildren = children.filter(c => c.entryType === 'model');
+        const directModelChildren = children.filter(c =>
+          c.entryType === 'model' && !(c.hidden === true && !isUnlockedByDetachment(c, detachmentId))
+        );
         const containerChildren = children.filter(isContainerItem);
         const meaningfulContainerChildren = containerChildren.filter(
           c => c.minInRoster != null || c.maxInRoster != null
@@ -525,6 +568,10 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
         }
 
         for (const child of children) {
+          // Пропускаем записи, скрытые по умолчанию, если они не разблокированы текущим детачментом.
+          // Поле hidden появилось в /unitsTree после обновления wh40kAPI.
+          if (child.hidden === true && !isUnlockedByDetachment(child, detachmentId)) continue;
+
           if (child.entryType === 'model') {
             const modelUnit = mapItem(child, depth + 1);
             // Сохраняем minInRoster как minCount для прямых дочерних моделей
@@ -542,6 +589,12 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
             } else {
               result.push(minCount !== undefined ? { ...modelUnit, minCount } : modelUnit);
             }
+          } else if (child.entryType === 'upgrade' && child.hidden === true) {
+            // upgrade-запись, разблокированная детачментом (hidden=true прошла проверку выше).
+            // Добавляем как дополнительную запись юнита (аналогично модели).
+            const upgradeUnit = mapItem(child, depth + 1);
+            const minCount = child.minInRoster !== undefined ? toNum(child.minInRoster) : undefined;
+            result.push(minCount !== undefined ? { ...upgradeUnit, minCount } : upgradeUnit);
           } else if (isContainerItem(child)) {
             // Промежуточный контейнер (entryType=null или "selectionEntryGroup") — передаём parentCostBands дальше.
             // isNestedInContainer=true запрещает создание синтетического контейнера в рекурсивном вызове,
@@ -576,7 +629,7 @@ export async function getUnits(factionId: string): Promise<Unit[]> {
               });
             }
           }
-          // Узлы типа "upgrade" и прочие — пропускаем
+          // Остальные типы (upgrade без скрытия, прочие) — пропускаем
         }
         return result;
       }
