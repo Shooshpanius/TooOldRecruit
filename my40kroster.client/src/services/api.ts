@@ -658,18 +658,16 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
     //   • Узел upgrade и прочие → пропускаем.
     //
     // insideAllied=true означает, что мы находимся внутри раздела связанного каталога
-    // (например «Allied Units» или раздела с catalogueId Unaligned Forces).
+    // (узла с catalogueId, не совпадающим с id текущей фракции).
     function collectUnits(nodes: ApiUnitItem[], insideAllied = false): ApiUnitItem[] {
       const result: ApiUnitItem[] = [];
       for (const node of nodes) {
         // Определяем: является ли текущий узел или его контекст разделом «союзных» юнитов.
         // Критерии:
         //   1. Уже находимся внутри Allied-раздела (флаг от родителя)
-        //   2. Узел-контейнер (selectionEntryGroup или без entryType) с именем, содержащим «allied»
-        //   3. catalogueId совпадает с Unaligned Forces
+        //   2. catalogueId узла определён и не совпадает с id текущей фракции
         const isAlliedSection = insideAllied
-          || (isContainerItem(node) && node.name?.toLowerCase().includes('allied'))
-          || node.catalogueId === UNALIGNED_FORCES_ID;
+          || (node.catalogueId != null && node.catalogueId !== factionId);
 
         if (node.entryType === 'unit' || node.entryType === 'model') {
           // Пропускаем отряды/модели, скрытые по умолчанию и не разблокированные текущим детачментом.
