@@ -346,8 +346,8 @@ const DETACHMENT_EXCLUSIVE_UNITS: Record<string, string[]> = {
 // (через явные entryLinks с условиями детачмента, например Chaos Space Marines в CK).
 //
 // Источник: <catalogueLinks> в *.cat-файлах репозитория github.com/BSData/wh40k-10e
-// Используется как резервный источник, когда wh40kAPI ещё не реализовал
-// эндпоинт GET /fractions/{id}/ownCatalogues.
+// Используется как резервный источник на случай недоступности эндпоинта
+// GET /fractions/{id}/ownCatalogues (Shooshpanius/wh40kAPI@2ea5612).
 const FACTION_OWN_CATALOGUE_IDS: Record<string, string[]> = {
   // ── Chaos - Chaos Knights (46d8-abc8-ef3a-9f85) ──────────────────────────
   // catalogueLinks с importRootEntries="true":
@@ -365,12 +365,12 @@ const FACTION_OWN_CATALOGUE_IDS: Record<string, string[]> = {
   ],
 };
 
-// Загружает список «собственных» каталогов фракции через прокси-эндпоинт.
+// Загружает список «собственных» каталогов фракции через прокси-эндпоинт
+// GET /api/bsdata/fractions/{id}/own-catalogues → wh40kAPI GET /fractions/{id}/ownCatalogues.
 // «Собственные» каталоги — это каталог фракции плюс все каталоги, связанные через
-// importRootEntries="true" в BSData (рекурсивно).
-// Когда wh40kAPI реализует эндпоинт /ownCatalogues, возвращает Set с этими ID.
-// Пока эндпоинт не реализован (ответ не 2xx или пустой массив) — возвращает null,
-// и вызывающий код применяет FACTION_OWN_CATALOGUE_IDS как резервный источник.
+// importRootEntries="true" в BSData (рекурсивно). Реализовано в Shooshpanius/wh40kAPI@2ea5612.
+// При ошибке сети или ответе не-2xx возвращает null, и вызывающий код
+// использует FACTION_OWN_CATALOGUE_IDS как резервный источник.
 async function fetchOwnCatalogueIds(factionId: string): Promise<Set<string> | null> {
   try {
     const res = await fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/own-catalogues`);
@@ -681,7 +681,7 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
     //
     // Собственные каталоги: wh40kAPI возвращает список catalogueId, связанных через
     // importRootEntries="true" — юниты из них являются основной частью фракции, а не Allied.
-    // Пока этот эндпоинт не реализован — используется FACTION_OWN_CATALOGUE_IDS.
+    // Реализовано в wh40kAPI@2ea5612; при ошибке используется FACTION_OWN_CATALOGUE_IDS.
     const [data, serverConditions, serverOwnCatalogues] = await Promise.all([
       fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`).then(r => {
         if (!r.ok) throw new Error('Failed to fetch units');
