@@ -363,6 +363,16 @@ const FACTION_OWN_CATALOGUE_IDS: Record<string, string[]> = {
     'b00-cd86-4b4c-97ba', // Imperium - Agents of the Imperium
     '7481-280e-b55e-7867', // Library - Titans
   ],
+  // ── Imperium - Adeptus Mechanicus (77b9-2f66-3f9b-5cf3) ──────────────────
+  // catalogueLinks с importRootEntries="true":
+  // Cerastus Knights (Acheron/Atrapos/Castigator/Lancer) находятся в IK Library
+  // и должны быть частью фракции, а не Allied Units.
+  // Источник: Imperium - Adeptus Mechanicus.cat (github.com/BSData/wh40k-10e)
+  '77b9-2f66-3f9b-5cf3': [
+    '1b6d-dc06-5db9-c7d1', // Imperium - Imperial Knights - Library (содержит Cerastus Knights)
+    'b00-cd86-4b4c-97ba',  // Imperium - Agents of the Imperium
+    '7481-280e-b55e-7867', // Library - Titans
+  ],
 };
 
 // Загружает список «собственных» каталогов фракции через прокси-эндпоинт
