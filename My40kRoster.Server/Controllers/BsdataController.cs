@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 
 namespace My40kRoster.Server.Controllers
@@ -162,110 +160,22 @@ namespace My40kRoster.Server.Controllers
         }
 
         // Прокси к нативному эндпоинту wh40kAPI GET /fractions/{id}/unitsList.
-        // Возвращает облегчённое дерево юнитов без характеристик (profiles не загружаются из БД).
+        // Возвращает облегчённое дерево юнитов: без profiles, без infoLinks на дочерних узлах,
+        // без categories/unitCategories на дочерних узлах, только type+name в infoLinks корневых узлов.
         // Используется для быстрого отображения списка отрядов в каталоге;
         // полные характеристики загружаются по запросу через /units/{id}/full-node.
-        // Реализовано в wh40kAPI: Shooshpanius/wh40kAPI@59348c7
-        //
-        // WORKAROUND: дополнительно обрезает поля, не нужные для отображения списка отрядов.
-        // Когда wh40kAPI нативно исключит эти поля из /unitsList (см. docs/wh40kAPI-issue-unitsList-slim.md),
-        // методы StripUnitsListJson / StripUnitsListNode / StripInfoLinkFields можно удалить,
-        // а этот эндпоинт упростить до обычного прокси без постобработки.
-        //   • у корневых узлов (глубина 0) удаляет вспомогательные подполя infoLinks: id и targetId
-        //     (клиент использует только type и name — для проверки Leader и названий способностей);
-        //   • у дочерних узлов (глубина ≥ 1) удаляет infoLinks целиком (ключевые слова оружия
-        //     приходят через /units/{id}/full-node при выборе отряда) и categories/unitCategories
-        //     (состав отряда в каталоге не отображает категорию отдельных моделей).
         [HttpGet("fractions/{id}/units-list")]
         public async Task<IActionResult> GetFractionUnitsList(string id)
         {
             var client = httpClientFactory.CreateClient("wh40kapi");
             using var response = await client.GetAsync($"fractions/{Uri.EscapeDataString(id)}/unitsList").ConfigureAwait(false);
             var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            if (response.IsSuccessStatusCode)
-                content = StripUnitsListJson(content);
             return new ContentResult
             {
                 Content = content,
                 ContentType = "application/json; charset=utf-8",
                 StatusCode = (int)response.StatusCode,
             };
-        }
-
-        // Обрезает лишние поля из ответа unitsList, чтобы уменьшить размер payload.
-        // Корневые узлы: из каждого infoLink удаляются id и targetId.
-        // Дочерние узлы (любой глубины): infoLinks удаляется целиком; categories и unitCategories удаляются.
-        // При ошибке парсинга возвращается исходная строка без изменений.
-        private static string StripUnitsListJson(string json)
-        {
-            try
-            {
-                var root = JsonNode.Parse(json);
-                if (root == null) return json;
-
-                JsonArray? nodes = root as JsonArray
-                    ?? (root as JsonObject)?["units"] as JsonArray
-                    ?? (root as JsonObject)?["children"] as JsonArray
-                    ?? (root as JsonObject)?["nodes"] as JsonArray;
-
-                if (nodes != null)
-                {
-                    foreach (var node in nodes)
-                        StripUnitsListNode(node as JsonObject, isRoot: true);
-                }
-
-                return root.ToJsonString();
-            }
-            catch (JsonException)
-            {
-                return json;
-            }
-            catch (InvalidOperationException)
-            {
-                return json;
-            }
-        }
-
-        private static void StripUnitsListNode(JsonObject? node, bool isRoot)
-        {
-            if (node == null) return;
-
-            if (isRoot)
-            {
-                // Корневой узел: удаляем из каждого infoLink неиспользуемые поля id и targetId.
-                // Клиент использует только type (для определения leader/rule) и name (для отображения).
-                if (node["infoLinks"] is JsonArray links)
-                    StripInfoLinkFields(links);
-            }
-            else
-            {
-                // Дочерний узел: infoLinks не нужны (ключевые слова оружия загружаются через fullNode).
-                // categories не нужны — состав отряда в каталоге отображается без категории модели.
-                node.Remove("infoLinks");
-                node.Remove("categories");
-                node.Remove("unitCategories");
-            }
-
-            // Рекурсивно обрабатываем дочерние узлы.
-            if (node["children"] is JsonArray children)
-            {
-                foreach (var child in children)
-                    StripUnitsListNode(child as JsonObject, isRoot: false);
-            }
-        }
-
-        // Удаляет из массива infoLinks неиспользуемые подполя id и targetId.
-        // Клиент использует только type и name для определения Leader и названий способностей.
-        private static void StripInfoLinkFields(JsonArray links)
-        {
-            foreach (var link in links)
-            {
-                if (link is JsonObject linkObj)
-                {
-                    linkObj.Remove("id");
-                    linkObj.Remove("targetId");
-                }
-            }
         }
 
         // Прокси к эндпоинту wh40kAPI GET /units/{id}/fullNode.
