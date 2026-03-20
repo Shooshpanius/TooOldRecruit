@@ -186,5 +186,22 @@ namespace My40kRoster.Server.Controllers
                 StatusCode = (int)response.StatusCode
             };
         }
+
+        // Прокси к эндпоинту wh40kAPI GET /units/{id}/profiles.
+        // Возвращает BSData профили юнита: характеристики (M/T/Sv/W/Ld/OC для юнита,
+        // Range/A/BS/S/AP/D для оружия) и тип профиля (typeName).
+        [HttpGet("units/{id}/profiles")]
+        public async Task<IActionResult> GetUnitProfiles(string id)
+        {
+            var client = httpClientFactory.CreateClient("wh40kapi");
+            using var response = await client.GetAsync($"units/{Uri.EscapeDataString(id)}/profiles").ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return new ContentResult
+            {
+                Content = content,
+                ContentType = "application/json; charset=utf-8",
+                StatusCode = (int)response.StatusCode
+            };
+        }
     }
 }
