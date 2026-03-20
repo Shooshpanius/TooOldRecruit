@@ -702,7 +702,14 @@ function isContainerItem(item: ApiUnitItem): boolean {
     && item.children.length > 0;
 }
 
-export async function getUnits(factionId: string, detachmentId?: string): Promise<Unit[]> {
+// Опции для getUnits(): lightweight=true переключает на облегчённый эндпоинт /units-list,
+// который не включает характеристики (profiles) юнитов и оружия. Используется в каталоге
+// для быстрого отображения списка отрядов. Полные данные загружаются фоном через второй вызов.
+export interface GetUnitsOptions {
+  lightweight?: boolean;
+}
+
+export async function getUnits(factionId: string, detachmentId?: string, options?: GetUnitsOptions): Promise<Unit[]> {
   try {
     // Загружаем дерево юнитов, условия детачментов и собственные каталоги параллельно.
     // Условия детачментов: wh40kAPI разбирает entryLink-модификаторы из BSData .cat-файлов
@@ -713,8 +720,14 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
     // Собственные каталоги: wh40kAPI возвращает список catalogueId, связанных через
     // importRootEntries="true" — юниты из них являются основной частью фракции, а не Allied.
     // Реализовано в wh40kAPI@2ea5612; при ошибке используется FACTION_OWN_CATALOGUE_IDS.
+    //
+    // Эндпоинт: lightweight=true → /units-list (без profiles, быстрее),
+    //           lightweight=false/undefined → /unitsTree (полные данные).
+    const unitsTreeEndpoint = options?.lightweight
+      ? `${WH40K_API}/fractions/${encodeURIComponent(factionId)}/units-list`
+      : `${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`;
     const [data, serverConditions, serverOwnCatalogues] = await Promise.all([
-      fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`).then(r => {
+      fetch(unitsTreeEndpoint).then(r => {
         if (!r.ok) throw new Error('Failed to fetch units');
         return r.json();
       }),
@@ -1186,3 +1199,86 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
     return DEFAULT_UNITS;
   }
 }
+
+// Тип для обогащённых данных одного юнита: характеристики, оружие, ключевые слова, способности.
+// Возвращается из getUnitDetail() и объединяется с облегчённым объектом Unit из списка.
+export interface UnitDetail {
+  profiles?: UnitProfile[];
+  weapons?: UnitWeapon[];
+  keywords?: string[];
+  abilities?: string[];
+}
+
+// Загружает полный датащит для одного юнита через нативный эндпоинт wh40kAPI
+// GET /units/{id}/fullNode (реализован в Shooshpanius/wh40kAPI@59348c7).
+// Возвращает обогащённые данные: характеристики, оружие, ключевые слова, способности.
+// При ошибке возвращает null, и клиент продолжает отображать облегчённый объект Unit.
+export async function getUnitDetail(unitId: string): Promise<UnitDetail | null> {
+  try {
+    const res = await fetch(`${WH40K_API}/units/${encodeURIComponent(unitId)}/full-node`);
+    if (!res.ok) return null;
+    const item: ApiUnitItem = await res.json();
+
+    // Профили юнита (typeName="Unit" → M/T/Sv/W/Ld/OC)
+    let profiles: UnitProfile[] | undefined;
+    if (Array.isArray(item.profiles) && item.profiles.length > 0) {
+      const parsed = item.profiles
+        .filter(p => p.typeName?.toLowerCase() === 'unit')
+        .map(p => ({
+          name: p.name ?? '',
+          typeName: p.typeName ?? '',
+          characteristics: p.characteristics ?? '{}',
+        }));
+      if (parsed.length > 0) profiles = parsed;
+    }
+
+    // Оружие: дочерние upgrade-узлы с weapon-профилями
+    let weapons: UnitWeapon[] | undefined;
+    if (Array.isArray(item.children) && item.children.length > 0) {
+      const result: UnitWeapon[] = [];
+      for (const child of item.children) {
+        if (child.entryType !== 'upgrade') continue;
+        if (!Array.isArray(child.profiles) || child.profiles.length === 0) continue;
+        const weaponProfiles = child.profiles
+          .filter(p => p.typeName?.toLowerCase().includes('weapon'))
+          .map(p => ({
+            name: p.name ?? child.name ?? '',
+            typeName: p.typeName ?? '',
+            characteristics: p.characteristics ?? '{}',
+          }));
+        if (weaponProfiles.length === 0) continue;
+        const keywords = (child.infoLinks ?? [])
+          .filter(l => l.type === 'rule')
+          .map(l => l.name ?? '')
+          .filter(Boolean);
+        result.push({
+          id: child.id ?? child.name ?? '',
+          name: child.name ?? '',
+          keywords,
+          profiles: weaponProfiles,
+        });
+      }
+      if (result.length > 0) weapons = result;
+    }
+
+    // Ключевые слова: категории где primary=false
+    const allCats = item.categories ?? item.unitCategories;
+    const kws = (allCats ?? [])
+      .filter(c => c.primary === false)
+      .map(c => c.name ?? '')
+      .filter(Boolean);
+    const keywords = kws.length > 0 ? kws : undefined;
+
+    // Способности: infoLinks типа rule, кроме «Leader»
+    const abilityNames = (item.infoLinks ?? [])
+      .filter(l => l.type === 'rule' && l.name !== 'Leader')
+      .map(l => l.name ?? '')
+      .filter(Boolean);
+    const abilities = abilityNames.length > 0 ? abilityNames : undefined;
+
+    return { profiles, weapons, keywords, abilities };
+  } catch {
+    return null;
+  }
+}
+

@@ -159,6 +159,44 @@ namespace My40kRoster.Server.Controllers
             };
         }
 
+        // Прокси к нативному эндпоинту wh40kAPI GET /fractions/{id}/unitsList.
+        // Возвращает облегчённое дерево юнитов без характеристик (profiles не загружаются из БД).
+        // Используется для быстрого отображения списка отрядов в каталоге;
+        // полные характеристики загружаются по запросу через /units/{id}/full-node.
+        // Реализовано в wh40kAPI: Shooshpanius/wh40kAPI@59348c7
+        [HttpGet("fractions/{id}/units-list")]
+        public async Task<IActionResult> GetFractionUnitsList(string id)
+        {
+            var client = httpClientFactory.CreateClient("wh40kapi");
+            using var response = await client.GetAsync($"fractions/{Uri.EscapeDataString(id)}/unitsList").ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return new ContentResult
+            {
+                Content = content,
+                ContentType = "application/json; charset=utf-8",
+                StatusCode = (int)response.StatusCode,
+            };
+        }
+
+        // Прокси к эндпоинту wh40kAPI GET /units/{id}/fullNode.
+        // Возвращает полный BsDataUnitNode для одного юнита: характеристики (profiles),
+        // дочерние upgrade-узлы (оружие) с их profiles и infoLinks.
+        // Используется для отображения полного датащита выбранного отряда в каталоге.
+        // Реализовано в wh40kAPI: Shooshpanius/wh40kAPI@59348c7
+        [HttpGet("units/{id}/full-node")]
+        public async Task<IActionResult> GetUnitFullNode(string id)
+        {
+            var client = httpClientFactory.CreateClient("wh40kapi");
+            using var response = await client.GetAsync($"units/{Uri.EscapeDataString(id)}/fullNode").ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return new ContentResult
+            {
+                Content = content,
+                ContentType = "application/json; charset=utf-8",
+                StatusCode = (int)response.StatusCode,
+            };
+        }
+
         [HttpGet("units/{id}/categories")]
         public async Task<IActionResult> GetUnitCategories(string id)
         {
