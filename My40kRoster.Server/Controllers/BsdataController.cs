@@ -160,10 +160,10 @@ namespace My40kRoster.Server.Controllers
         }
 
         // Прокси к нативному эндпоинту wh40kAPI GET /fractions/{id}/unitsList.
-        // Возвращает облегчённое дерево юнитов без характеристик (profiles не загружаются из БД).
+        // Возвращает облегчённое дерево юнитов: без profiles, без infoLinks на дочерних узлах,
+        // без categories/unitCategories на дочерних узлах, только type+name в infoLinks корневых узлов.
         // Используется для быстрого отображения списка отрядов в каталоге;
         // полные характеристики загружаются по запросу через /units/{id}/full-node.
-        // Реализовано в wh40kAPI: Shooshpanius/wh40kAPI@59348c7
         [HttpGet("fractions/{id}/units-list")]
         public async Task<IActionResult> GetFractionUnitsList(string id)
         {
