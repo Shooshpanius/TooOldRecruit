@@ -1448,6 +1448,13 @@ label.toggle-row.toggle-row--disabled {
   color: var(--text-muted);
 }
 
+.unit-detail-loading {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
 .unit-stat-table {
   width: 100%;
   border-collapse: collapse;

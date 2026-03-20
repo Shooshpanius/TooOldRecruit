@@ -702,7 +702,14 @@ function isContainerItem(item: ApiUnitItem): boolean {
     && item.children.length > 0;
 }
 
-export async function getUnits(factionId: string, detachmentId?: string): Promise<Unit[]> {
+// Опции для getUnits(): lightweight=true переключает на облегчённый эндпоинт /units-list,
+// который не включает характеристики (profiles) юнитов и оружия. Используется в каталоге
+// для быстрого отображения списка отрядов. Полные данные загружаются фоном через второй вызов.
+export interface GetUnitsOptions {
+  lightweight?: boolean;
+}
+
+export async function getUnits(factionId: string, detachmentId?: string, options?: GetUnitsOptions): Promise<Unit[]> {
   try {
     // Загружаем дерево юнитов, условия детачментов и собственные каталоги параллельно.
     // Условия детачментов: wh40kAPI разбирает entryLink-модификаторы из BSData .cat-файлов
@@ -713,8 +720,14 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
     // Собственные каталоги: wh40kAPI возвращает список catalogueId, связанных через
     // importRootEntries="true" — юниты из них являются основной частью фракции, а не Allied.
     // Реализовано в wh40kAPI@2ea5612; при ошибке используется FACTION_OWN_CATALOGUE_IDS.
+    //
+    // Эндпоинт: lightweight=true → /units-list (без profiles, быстрее),
+    //           lightweight=false/undefined → /unitsTree (полные данные).
+    const unitsTreeEndpoint = options?.lightweight
+      ? `${WH40K_API}/fractions/${encodeURIComponent(factionId)}/units-list`
+      : `${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`;
     const [data, serverConditions, serverOwnCatalogues] = await Promise.all([
-      fetch(`${WH40K_API}/fractions/${encodeURIComponent(factionId)}/unitsTree`).then(r => {
+      fetch(unitsTreeEndpoint).then(r => {
         if (!r.ok) throw new Error('Failed to fetch units');
         return r.json();
       }),

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Nodes;
 
 namespace My40kRoster.Server.Controllers
 {
@@ -158,6 +159,54 @@ namespace My40kRoster.Server.Controllers
                 StatusCode = 200
             };
         }
+
+        // Прокси к эндпоинту wh40kAPI GET /fractions/{id}/unitsTree, но с удалёнными полями profiles.
+        // Возвращает облегчённое дерево юнитов — только структурные данные (id, name, entryType,
+        // categories, costs, modifierGroups, infoLinks, children и т.д.) без характеристик юнитов
+        // и без характеристик оружия. Используется в каталоге для быстрого отображения списка
+        // отрядов: клиент получает список сразу, а полные характеристики загружает отдельно
+        // (фоновая загрузка через /fractions/{id}/unitsTree).
+        //
+        // Пока wh40kAPI не реализовал нативный лёгкий эндпоинт /fractions/{id}/unitsList,
+        // TooOldRecruit удаляет поле profiles на стороне сервера, сокращая размер ответа.
+        // Задача для wh40kAPI: docs/wh40kAPI-issue-split-catalog-api.md
+        [HttpGet("fractions/{id}/units-list")]
+        public async Task<IActionResult> GetFractionUnitsList(string id)
+        {
+            var client = httpClientFactory.CreateClient("wh40kapi");
+            using var response = await client.GetAsync($"fractions/{Uri.EscapeDataString(id)}/unitsTree").ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                return new ContentResult { Content = errContent, ContentType = "application/json; charset=utf-8", StatusCode = (int)response.StatusCode };
+            }
+            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var nodes = JsonNode.Parse(json);
+            StripProfilesRecursive(nodes);
+            return new ContentResult
+            {
+                Content = nodes?.ToJsonString() ?? "[]",
+                ContentType = "application/json; charset=utf-8",
+                StatusCode = 200,
+            };
+        }
+
+        // Рекурсивно удаляет поле "profiles" из JSON-узлов дерева юнитов.
+        private static void StripProfilesRecursive(JsonNode? node)
+        {
+            if (node is JsonArray array)
+            {
+                foreach (var item in array)
+                    StripProfilesRecursive(item);
+            }
+            else if (node is JsonObject obj)
+            {
+                obj.Remove("profiles");
+                if (obj["children"] is JsonNode children)
+                    StripProfilesRecursive(children);
+            }
+        }
+
 
         [HttpGet("units/{id}/categories")]
         public async Task<IActionResult> GetUnitCategories(string id)
