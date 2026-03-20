@@ -4,6 +4,7 @@ import { RosterProvider } from './contexts/RosterContext';
 import { HomePage } from './pages/HomePage';
 import { CreateRosterPage } from './pages/CreateRosterPage';
 import { RosterDetailPage } from './pages/RosterDetailPage';
+import { CatalogPage } from './pages/CatalogPage';
 import './App.css';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/create" element={<CreateRosterPage />} />
             <Route path="/roster/:id" element={<RosterDetailPage />} />
+            <Route path="/catalog" element={<CatalogPage />} />
           </Routes>
         </RosterProvider>
       </AuthProvider>

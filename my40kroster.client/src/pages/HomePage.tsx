@@ -44,9 +44,14 @@ export function HomePage() {
       <main>
         <div className="section-header">
           <h2>Мои ростеры</h2>
-          <button onClick={() => navigate('/create')} className="btn btn-primary">
-            + Новый ростер
-          </button>
+          <div className="section-header-actions">
+            <button onClick={() => navigate('/catalog')} className="btn btn-secondary">
+              📖 Каталог
+            </button>
+            <button onClick={() => navigate('/create')} className="btn btn-primary">
+              + Новый ростер
+            </button>
+          </div>
         </div>
 
         {!user && (
