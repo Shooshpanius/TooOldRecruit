@@ -2,7 +2,11 @@
 
 ## Статус
 
-Открыта. Зафиксирована после проверки ответа `/unitsList` (коммит
+**Закрыта.** Реализовано в коммите
+[`d82a681d`](https://github.com/Shooshpanius/wh40kAPI/commit/d82a681d1051bb49437aa72cda51679e3435d3f1)
+(«Slim /unitsList response: BsDataModifierGroupSlim, JsonIgnore parentId, empty catalogueId on children»).
+
+Задача была открыта после проверки ответа `/unitsList` (коммит
 [`5e68c5b9`](https://github.com/Shooshpanius/wh40kAPI/commit/5e68c5b9a5aba355859915dda4045c0555ccf1fc)),
 который исключил `profiles`, убрал `infoLinks`/`categories` с дочерних узлов и спроецировал
 `infoLinks` корневых узлов на slim-объект (только `type` + `name`).
