@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 
 namespace My40kRoster.Server.Controllers
@@ -164,18 +165,149 @@ namespace My40kRoster.Server.Controllers
         // без categories/unitCategories на дочерних узлах, только type+name в infoLinks корневых узлов.
         // Используется для быстрого отображения списка отрядов в каталоге;
         // полные характеристики загружаются по запросу через /units/{id}/full-node.
+        //
+        // Временная серверная зачистка (до реализации исправлений в wh40kAPI, см. docs/wh40kAPI-issue-unitsList-slim-2.md):
+        // — убирает categories и infoLinks из узлов depth ≥ 1;
+        // — убирает поля id/unitId из объектов categories и costTiers;
+        // — возвращает минифицированный JSON (без отступов).
         [HttpGet("fractions/{id}/units-list")]
         public async Task<IActionResult> GetFractionUnitsList(string id)
         {
             var client = httpClientFactory.CreateClient("wh40kapi");
             using var response = await client.GetAsync($"fractions/{Uri.EscapeDataString(id)}/unitsList").ConfigureAwait(false);
             var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var stripped = StripUnitsListResponse(content);
             return new ContentResult
             {
-                Content = content,
+                Content = stripped,
                 ContentType = "application/json; charset=utf-8",
                 StatusCode = (int)response.StatusCode,
             };
+        }
+
+        /// <summary>
+        /// Strips unnecessary fields from the wh40kAPI /unitsList response and returns minified JSON.
+        /// Removes: categories/infoLinks from depth≥1 nodes; id/unitId from categories and costTiers objects.
+        /// Falls back to original content on parse errors.
+        /// </summary>
+        private static string StripUnitsListResponse(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                    return json;
+
+                using var ms = new System.IO.MemoryStream();
+                using (var writer = new Utf8JsonWriter(ms))
+                {
+                    WriteNodeArray(writer, doc.RootElement, depth: 0);
+                }
+                return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+            }
+            catch (JsonException)
+            {
+                return json;
+            }
+        }
+
+        private static void WriteNodeArray(Utf8JsonWriter writer, JsonElement array, int depth)
+        {
+            writer.WriteStartArray();
+            foreach (var element in array.EnumerateArray())
+                WriteNode(writer, element, depth);
+            writer.WriteEndArray();
+        }
+
+        private static void WriteNode(Utf8JsonWriter writer, JsonElement node, int depth)
+        {
+            writer.WriteStartObject();
+            foreach (var prop in node.EnumerateObject())
+            {
+                switch (prop.Name)
+                {
+                    case "categories":
+                        writer.WritePropertyName("categories");
+                        if (depth == 0)
+                            WriteSlimCategories(writer, prop.Value);
+                        else
+                            WriteEmptyArray(writer);
+                        break;
+
+                    case "infoLinks":
+                        writer.WritePropertyName("infoLinks");
+                        if (depth == 0)
+                            prop.Value.WriteTo(writer);
+                        else
+                            WriteEmptyArray(writer);
+                        break;
+
+                    case "costTiers":
+                        writer.WritePropertyName("costTiers");
+                        WriteSlimCostTiers(writer, prop.Value);
+                        break;
+
+                    case "children":
+                        writer.WritePropertyName("children");
+                        WriteNodeArray(writer, prop.Value, depth + 1);
+                        break;
+
+                    case "points":
+                        writer.WritePropertyName("points");
+                        if (prop.Value.ValueKind == JsonValueKind.Null)
+                            writer.WriteNullValue();
+                        else if (prop.Value.ValueKind == JsonValueKind.Number)
+                            writer.WriteNumberValue(prop.Value.GetDouble());
+                        else
+                            prop.Value.WriteTo(writer);
+                        break;
+
+                    default:
+                        prop.WriteTo(writer);
+                        break;
+                }
+            }
+            writer.WriteEndObject();
+        }
+
+        /// <summary>Writes categories array keeping only name and primary fields.</summary>
+        private static void WriteSlimCategories(Utf8JsonWriter writer, JsonElement categories)
+        {
+            writer.WriteStartArray();
+            foreach (var cat in categories.EnumerateArray())
+            {
+                writer.WriteStartObject();
+                if (cat.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
+                    writer.WriteString("name", name.GetString());
+                if (cat.TryGetProperty("primary", out var primary) && (primary.ValueKind == JsonValueKind.True || primary.ValueKind == JsonValueKind.False))
+                    writer.WriteBoolean("primary", primary.GetBoolean());
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+
+        /// <summary>Writes costTiers array keeping only minModels, maxModels and points fields.</summary>
+        private static void WriteSlimCostTiers(Utf8JsonWriter writer, JsonElement costTiers)
+        {
+            writer.WriteStartArray();
+            foreach (var tier in costTiers.EnumerateArray())
+            {
+                writer.WriteStartObject();
+                if (tier.TryGetProperty("minModels", out var minModels) && minModels.ValueKind == JsonValueKind.Number)
+                    writer.WriteNumber("minModels", minModels.GetInt32());
+                if (tier.TryGetProperty("maxModels", out var maxModels) && maxModels.ValueKind == JsonValueKind.Number)
+                    writer.WriteNumber("maxModels", maxModels.GetInt32());
+                if (tier.TryGetProperty("points", out var points) && points.ValueKind == JsonValueKind.Number)
+                    writer.WriteNumber("points", points.GetDouble());
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+
+        private static void WriteEmptyArray(Utf8JsonWriter writer)
+        {
+            writer.WriteStartArray();
+            writer.WriteEndArray();
         }
 
         // Прокси к эндпоинту wh40kAPI GET /units/{id}/fullNode.
