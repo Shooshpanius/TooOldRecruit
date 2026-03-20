@@ -224,7 +224,7 @@ interface ApiUnitItem {
   //
   // До реализации этого динамического подхода XOR обеспечивается через
   // статическую таблицу CONTAINER_EXCLUSIVE_GROUPS ниже.
-  modifierGroups?: Array<{ id?: number; unitId?: string; modifiers?: string | null; conditions?: string | null }>;
+  modifierGroups?: Array<{ modifiers?: string | null; conditions?: string | null }>;
   // Upgrade-дочерние записи с ограничениями minInRoster > 0 и детачмент-условием.
   // Добавлено в ответ /fractions/{id}/unitsTree после обновления wh40kAPI (коммит e28e595).
   // Заполняется для записей типа "model", у которых есть upgrade-дети, скрытые без определённого детачмента.
@@ -770,9 +770,10 @@ export async function getUnits(factionId: string, detachmentId?: string, options
 
     // Собираем отряды уровня «корень фракции»: узлы типа "unit" или "model".
     // Работает с двумя форматами ответа API:
-    //   — плоский массив: все unit/model имеют parentId === null (текущий формат wh40kcards.ru);
-    //   — древовидный формат: unit/model могут быть вложены внутри контейнерных узлов
-    //     (категорий типа «HQ», «Battleline» и т.д.) — в таком случае parentId указывает на контейнер.
+    //   — вложенный формат (wh40kAPI /unitsList и /unitsTree): узлы unit/model находятся на
+    //     верхнем уровне или внутри контейнерных узлов (selectionEntryGroup).
+    //     Дочерние узлы (depth≥1) имеют catalogueId === "" в ответе /unitsList
+    //     (wh40kAPI@d82a681d), поэтому пустая строка не должна триггировать Allied-детекцию.
     //
     // Алгоритм (без проверки parentId):
     //   • Узел unit/model → добавляем в результат, НЕ рекурсируем в его children
@@ -788,10 +789,12 @@ export async function getUnits(factionId: string, detachmentId?: string, options
         // Определяем: является ли текущий узел или его контекст разделом «союзных» юнитов.
         // Критерии:
         //   1. Уже находимся внутри Allied-раздела (флаг от родителя)
-        //   2. catalogueId узла определён и не входит в множество собственных каталогов фракции
+        //   2. catalogueId узла определён, непустой и не входит в множество собственных каталогов фракции
         //      (ownCatalogueIds = {factionId} ∪ {каталоги с importRootEntries="true"})
+        //      Пустая строка ("") означает «неизвестно» (wh40kAPI@d82a681d обнуляет catalogueId
+        //      у дочерних узлов depth≥1 в /unitsList) — не должна триггировать Allied-детекцию.
         const isAlliedSection = insideAllied
-          || (node.catalogueId != null && !ownCatalogueIds.has(node.catalogueId));
+          || (node.catalogueId != null && node.catalogueId !== '' && !ownCatalogueIds.has(node.catalogueId));
 
         if (node.entryType === 'unit' || node.entryType === 'model') {
           // Пропускаем отряды/модели, скрытые по умолчанию и не разблокированные текущим детачментом.
