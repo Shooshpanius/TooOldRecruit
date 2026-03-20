@@ -1,4 +1,4 @@
-import type { Faction, Unit, UnitCostBand } from '../types';
+import type { Faction, Unit, UnitCostBand, UnitProfile, UnitWeapon } from '../types';
 
 const API_BASE = '/api';
 const WH40K_API = '/api/bsdata';
@@ -235,6 +235,14 @@ interface ApiUnitItem {
     minInRoster?: number | null;
     maxInRoster?: number | null;
     requiredDetachmentId?: string | null;
+  }>;
+  // Профили BSData: характеристики юнита/оружия (добавлено в unitsTree после задания wh40kAPI).
+  // typeName="Unit" → M/T/Sv/W/Ld/OC; typeName contains "Weapons" → Range/A/BS|WS/S/AP/D.
+  profiles?: Array<{
+    id?: string;
+    name?: string;
+    typeName?: string;
+    characteristics?: string; // JSON string
   }>;
 }
 
@@ -821,6 +829,7 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
     };
 
     const mapItem = (item: ApiUnitItem, depth = 0): Unit => {
+      const isTopLevel = depth === 0;
       const cats = item.categories ?? item.unitCategories;
       let cost: number | undefined;
       if (item.cost !== undefined) cost = toNum(item.cost);
@@ -843,7 +852,7 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
       let category = cats?.find(c => c.primary)?.name ??
         cats?.[0]?.name ??
         item.category ?? item.categoryName ?? item.entryType ?? item.type ?? 'Other';
-      if (depth === 0) {
+      if (isTopLevel) {
         ({ category, maxInRoster, minInRoster } = applyDetachmentModifiers(item, detachmentId, category, maxInRoster, minInRoster));
 
         // Дополнительный источник minInRoster — поле requiredUpgrades из wh40kAPI (коммит e28e595).
@@ -872,7 +881,7 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
       // Пример: «Houndpack Lance Character» у War Dog при Houndpack Lance.
       // Такие апгрейды отображаются как чекбоксы на карточке отряда в ростере.
       let detachmentUpgrades: Array<{ id: string; name: string; minInRoster?: number; maxInRoster?: number }> | undefined;
-      if (depth === 0 && detachmentId && Array.isArray(item.children)) {
+      if (isTopLevel && detachmentId && Array.isArray(item.children)) {
         const extracted = item.children
           .filter(child =>
             child.entryType === 'upgrade' &&
@@ -1080,6 +1089,75 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
         ? buildChildTree(item.children, hasVariableCost ? costBands : undefined)
         : undefined;
 
+      // Извлекаем профили юнита (характеристики M/T/Sv/W/Ld/OC).
+      // Появились в /unitsTree после задания wh40kAPI (поле profiles на каждом узле).
+      // Берём только profiles с typeName="Unit" — остальные (оружейные) разбираются ниже.
+      let unitProfiles: UnitProfile[] | undefined;
+      if (isTopLevel && Array.isArray(item.profiles) && item.profiles.length > 0) {
+        const parsed = item.profiles
+          .filter(p => p.typeName?.toLowerCase() === 'unit')
+          .map(p => ({
+            name: p.name ?? '',
+            typeName: p.typeName ?? '',
+            characteristics: p.characteristics ?? '{}',
+          }));
+        if (parsed.length > 0) unitProfiles = parsed;
+      }
+
+      // Извлекаем оружие: дочерние upgrade-узлы с профилями, содержащими weapon-тип.
+      // После задания wh40kAPI каждый дочерний узел имеет поле profiles[].
+      let unitWeapons: UnitWeapon[] | undefined;
+      if (isTopLevel && Array.isArray(item.children) && item.children.length > 0) {
+        const weapons: UnitWeapon[] = [];
+        for (const child of item.children) {
+          if (child.entryType !== 'upgrade') continue;
+          if (!Array.isArray(child.profiles) || child.profiles.length === 0) continue;
+          const weaponProfiles = child.profiles
+            .filter(p => p.typeName?.toLowerCase().includes('weapon'))
+            .map(p => ({
+              name: p.name ?? child.name ?? '',
+              typeName: p.typeName ?? '',
+              characteristics: p.characteristics ?? '{}',
+            }));
+          if (weaponProfiles.length === 0) continue;
+          const keywords = (child.infoLinks ?? [])
+            .filter(l => l.type === 'rule')
+            .map(l => l.name ?? '')
+            .filter(Boolean);
+          weapons.push({
+            id: child.id ?? child.name ?? '',
+            name: child.name ?? '',
+            keywords,
+            profiles: weaponProfiles,
+          });
+        }
+        if (weapons.length > 0) unitWeapons = weapons;
+      }
+
+      // Извлекаем ключевые слова: все категории, где primary=false.
+      // До обновления wh40kAPI API возвращал только primary-категорию;
+      // после обновления возвращает все категории.
+      let unitKeywords: string[] | undefined;
+      if (isTopLevel) {
+        const allCats = item.categories ?? item.unitCategories;
+        const kws = (allCats ?? [])
+          .filter(c => c.primary === false)
+          .map(c => c.name ?? '')
+          .filter(Boolean);
+        if (kws.length > 0) unitKeywords = kws;
+      }
+
+      // Извлекаем имена способностей: infoLinks типа rule на уровне юнита
+      // (кроме «Leader», который кодируется отдельным флагом isLeader).
+      let unitAbilities: string[] | undefined;
+      if (isTopLevel) {
+        const abilities = (item.infoLinks ?? [])
+          .filter(l => l.type === 'rule' && l.name !== 'Leader')
+          .map(l => l.name ?? '')
+          .filter(Boolean);
+        if (abilities.length > 0) unitAbilities = abilities;
+      }
+
       return {
         id: item.id ?? item.name ?? '',
         name: item.name ?? '',
@@ -1095,6 +1173,10 @@ export async function getUnits(factionId: string, detachmentId?: string): Promis
         models: models && models.length > 0 ? models : undefined,
         isAllied: item._isAllied === true,
         detachmentUpgrades: detachmentUpgrades && detachmentUpgrades.length > 0 ? detachmentUpgrades : undefined,
+        profiles: unitProfiles,
+        weapons: unitWeapons,
+        keywords: unitKeywords,
+        abilities: unitAbilities,
       };
     };
 

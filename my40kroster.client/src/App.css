@@ -1501,6 +1501,68 @@ label.toggle-row.toggle-row--disabled {
   border: 1px solid var(--border);
 }
 
+/* Weapon block inside the weapons section */
+.unit-weapon-block {
+  margin-bottom: 1rem;
+}
+
+.unit-weapon-block:last-child {
+  margin-bottom: 0;
+}
+
+.unit-weapon-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.unit-weapon-keywords {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Ability tags */
+.unit-detail-abilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.unit-ability-tag {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  background: rgba(192, 57, 43, 0.15);
+  color: var(--text);
+  border: 1px solid rgba(192, 57, 43, 0.4);
+}
+
+/* Keyword tags */
+.unit-detail-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.unit-keyword-tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.6rem;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
 /* Mobile */
 @media (max-width: 600px) {
   .container {

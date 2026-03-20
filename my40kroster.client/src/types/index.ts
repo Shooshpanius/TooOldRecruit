@@ -31,6 +31,26 @@ export interface UnitCostBand {
   cost: number;
 }
 
+// Профиль характеристик из BSData (GET /fractions/{id}/unitsTree → profiles[]).
+// typeName = "Unit" → характеристики модели (M/T/Sv/W/Ld/OC).
+// typeName содержит "Weapons" → характеристики оружия (Range/A/BS|WS/S/AP/D).
+// characteristics — JSON-строка вида "{\"M\":\"5\"\",\"T\":\"5\",...}".
+export interface UnitProfile {
+  name: string;
+  typeName: string;
+  characteristics: string; // JSON string, parse to Record<string, string>
+}
+
+// Одна единица оружия: дочерний upgrade-узел с профилями и ключевыми словами.
+export interface UnitWeapon {
+  id: string;
+  name: string;
+  // Ключевые слова оружия (из infoLinks type=rule дочернего узла)
+  keywords: string[];
+  // Профили оружия (Range/A/BS|WS/S/AP/D)
+  profiles: UnitProfile[];
+}
+
 // Детачмент-зависимая опция (апгрейд с чекбоксом), доступная при выборе конкретного детачмента.
 // Пример: «Houndpack Lance Character» для War Dog при детачменте Houndpack Lance.
 export interface UnitDetachmentUpgrade {
@@ -81,6 +101,17 @@ export interface Unit {
   // IDs выбранных детачмент-апгрейдов для данного юнита в ростере.
   // Сохраняется в составе данных ростера.
   selectedUpgradeIds?: string[];
+  // Профили BSData: характеристики юнита (typeName="Unit") из /unitsTree.
+  // Появились после обновления wh40kAPI (включение profiles в unitsTree).
+  profiles?: UnitProfile[];
+  // Оружие юнита: дочерние upgrade-записи с профилями и ключевыми словами.
+  // Появилось после обновления wh40kAPI (profiles на дочерних узлах).
+  weapons?: UnitWeapon[];
+  // Все ключевые слова юнита (из categories где primary=false).
+  // Появились после обновления wh40kAPI (все категории, не только primary).
+  keywords?: string[];
+  // Имена способностей юнита (из infoLinks type=rule, кроме «Leader»).
+  abilities?: string[];
 }
 
 export interface RosterUnit extends Unit {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getFactions, getUnits } from '../services/api';
-import type { Faction, Unit } from '../types';
+import type { Faction, Unit, UnitProfile } from '../types';
 
 const CATEGORY_ORDER = [
   'Epic Hero',
@@ -178,6 +178,58 @@ export function CatalogPage() {
   );
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+// Разбирает JSON-строку характеристик (e.g. "{\"M\":\"5\"\"}") в объект.
+// Возвращает пустой объект при ошибке.
+function parseChars(raw: string): Record<string, string> {
+  try { return JSON.parse(raw) as Record<string, string>; }
+  catch (_) { return {}; }
+}
+
+// Порядок характеристик юнита
+const UNIT_STAT_ORDER = ['M', 'T', 'Sv', 'InvSv', 'W', 'Ld', 'OC'];
+
+// Возвращает отсортированные ключи характеристик: сначала известные в нужном порядке, затем остальные.
+function sortedCharKeys(chars: Record<string, string>, order: string[]): string[] {
+  const keys = Object.keys(chars);
+  const known = order.filter(k => k in chars);
+  const unknown = keys.filter(k => !order.includes(k));
+  return [...known, ...unknown];
+}
+
+// Единая таблица профилей: принимает массив профилей одного типа.
+// Колонки выводятся в нужном порядке (statOrder).
+function ProfileTable({ profiles, statOrder }: { profiles: UnitProfile[]; statOrder: string[] }) {
+  if (profiles.length === 0) return null;
+  // Собираем все уникальные ключи из всех профилей
+  const allChars = profiles.map(p => parseChars(p.characteristics));
+  const allKeys = Array.from(new Set(allChars.flatMap(c => Object.keys(c))));
+  const cols = sortedCharKeys(Object.fromEntries(allKeys.map(k => [k, ''])), statOrder);
+  const multiRow = profiles.length > 1;
+  return (
+    <table className="unit-stat-table">
+      <thead>
+        <tr>
+          {multiRow && <th>Название</th>}
+          {cols.map(k => <th key={k}>{k}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {profiles.map((p, i) => {
+          const chars = parseChars(p.characteristics);
+          return (
+            <tr key={i}>
+              {multiRow && <td>{p.name}</td>}
+              {cols.map(k => <td key={k}>{chars[k] ?? '—'}</td>)}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 // ─── Unit Detail Card ────────────────────────────────────────────────────────
 
 function UnitDetailCard({ unit }: { unit: Unit }) {
@@ -196,6 +248,14 @@ function UnitDetailCard({ unit }: { unit: Unit }) {
           )}
         </div>
       </div>
+
+      {/* Unit stats (M/T/Sv/W/Ld/OC) */}
+      {unit.profiles && unit.profiles.length > 0 && (
+        <div className="unit-detail-section">
+          <div className="unit-detail-section-title">Характеристики</div>
+          <ProfileTable profiles={unit.profiles} statOrder={UNIT_STAT_ORDER} />
+        </div>
+      )}
 
       {/* Points */}
       <div className="unit-detail-section">
@@ -226,6 +286,48 @@ function UnitDetailCard({ unit }: { unit: Unit }) {
           <div className="unit-detail-cost unit-detail-muted">Нет данных</div>
         )}
       </div>
+
+      {/* Weapons */}
+      {unit.weapons && unit.weapons.length > 0 && (
+        <div className="unit-detail-section">
+          <div className="unit-detail-section-title">Оружие</div>
+          {unit.weapons.map(w => {
+            // Определяем набор колонок по первому профилю оружия.
+            // В BSData у каждого оружия ровно один профиль (либо Ranged, либо Melee),
+            // поэтому смешанных профилей в одном блоке не бывает.
+            const firstChars = w.profiles.length > 0 ? parseChars(w.profiles[0].characteristics) : {};
+            const isMelee = firstChars['Range']?.toLowerCase() === 'melee';
+            const colOrder = isMelee
+              ? ['Range', 'A', 'WS', 'S', 'AP', 'D']
+              : ['Range', 'A', 'BS', 'S', 'AP', 'D'];
+            return (
+              <div key={w.id} className="unit-weapon-block">
+                <div className="unit-weapon-name">
+                  {w.name}
+                  {w.keywords.length > 0 && (
+                    <span className="unit-weapon-keywords">
+                      {w.keywords.join(', ')}
+                    </span>
+                  )}
+                </div>
+                <ProfileTable profiles={w.profiles} statOrder={colOrder} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Abilities */}
+      {unit.abilities && unit.abilities.length > 0 && (
+        <div className="unit-detail-section">
+          <div className="unit-detail-section-title">Способности</div>
+          <div className="unit-detail-abilities">
+            {unit.abilities.map(a => (
+              <span key={a} className="unit-ability-tag">{a}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Composition */}
       {unit.models && unit.models.length > 0 && (
@@ -263,6 +365,18 @@ function UnitDetailCard({ unit }: { unit: Unit }) {
             {unit.maxInRoster !== undefined && (
               <span>Макс: {unit.maxInRoster}</span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Keywords */}
+      {unit.keywords && unit.keywords.length > 0 && (
+        <div className="unit-detail-section">
+          <div className="unit-detail-section-title">Ключевые слова</div>
+          <div className="unit-detail-keywords">
+            {unit.keywords.map(kw => (
+              <span key={kw} className="unit-keyword-tag">{kw}</span>
+            ))}
           </div>
         </div>
       )}
