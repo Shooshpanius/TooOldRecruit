@@ -2,7 +2,9 @@
 
 ## Статус
 
-**Открыта.**
+**Закрыта.** Поле `RequiredUpgrades` добавлено в `BsDataUnitNodeLite` в wh40kAPI.
+Клиент TooOldRecruit читает его автоматически через `ApiUnitItem.requiredUpgrades`
+в `mapItem()` — изменений на стороне TooOldRecruit не потребовалось.
 
 ---
 
