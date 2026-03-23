@@ -518,7 +518,7 @@ function applyDetachmentModifiers(
 // Возвращает true, если узел должен быть скрыт при текущем детачменте.
 // Применяется к записям, которые по умолчанию видимы (hidden: false), но содержат
 // модификатор hidden=true с условием "данного детачмента нет в ростере" (type=lessThan, value=1).
-// Паттерн BSData: modifier[type=set, field=hidden, value=true] + condition[type=lessThan, scope=roster, childId=<detachmentId>].
+// Паттерн BSData: modifier[type=set, field=hidden, value=true] + condition[type=lessThan, scope=roster|force, childId=<detachmentId>].
 // Смысл: запись скрывается, если указанный детачмент НЕ выбран.
 // Пример: "Houndpack Lance Character" скрывается без Houndpack Lance (6cb5-45cf-c626-fa86).
 function isHiddenByDetachment(item: ApiUnitItem, detachmentId: string | undefined): boolean {
@@ -542,10 +542,12 @@ function isHiddenByDetachment(item: ApiUnitItem, detachmentId: string | undefine
           field?: string;
         }>;
         for (const c of conds) {
-          // Условие: "записей с childId в ростере меньше 1" → скрыть, если детачмент не выбран
+          // Условие: "записей с childId в ростере/форсе меньше 1" → скрыть, если детачмент не выбран.
+          // scope="roster" — стандартный паттерн BSData (большинство фракций).
+          // scope="force" — альтернативный паттерн (Death Guard: Plaguebearers).
           if (
             c.type === 'lessThan' &&
-            c.scope === 'roster' &&
+            (c.scope === 'roster' || c.scope === 'force') &&
             c.field === 'selections' &&
             c.childId
           ) {
@@ -561,7 +563,7 @@ function isHiddenByDetachment(item: ApiUnitItem, detachmentId: string | undefine
 
 // Возвращает ID детачмента, при выборе которого данная запись становится видимой,
 // или null если запись не имеет детачмент-условного скрытия.
-// Паттерн BSData: modifier[type=set, field=hidden, value=true] + condition[type=lessThan, scope=roster, childId=detachmentId].
+// Паттерн BSData: modifier[type=set, field=hidden, value=true] + condition[type=lessThan, scope=roster|force, childId=detachmentId].
 // Смысл: запись скрыта, когда указанный детачмент НЕ выбран в ростере.
 // Пример: "Houndpack Lance Character" скрывается без Houndpack Lance (6cb5-45cf-c626-fa86),
 // значит функция вернёт "6cb5-45cf-c626-fa86".
@@ -585,7 +587,7 @@ function getRequiredDetachmentId(item: ApiUnitItem): string | null {
           field?: string;
         }>;
         for (const c of conds) {
-          if (c.type === 'lessThan' && c.scope === 'roster' && c.field === 'selections' && c.childId) {
+          if (c.type === 'lessThan' && (c.scope === 'roster' || c.scope === 'force') && c.field === 'selections' && c.childId) {
             return c.childId;
           }
         }
