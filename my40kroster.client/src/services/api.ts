@@ -805,6 +805,15 @@ export async function getUnits(factionId: string, detachmentId?: string, options
           // Пример: Cultist Firebrand (cb66-af7-2cca-1c85) → только Iconoclast Fiefdom (7fe8-…).
           const allowedDetachments = detachmentMap[node.id ?? ''];
           if (allowedDetachments && (!detachmentId || !allowedDetachments.includes(detachmentId))) continue;
+          // Пропускаем дочерние модели-артефакты плоского /unitsList (например, «Blue Horror»
+          // внутри «Blue Horrors»): у них есть категории, но ни одна не помечена primary.
+          // Самостоятельные узлы верхнего уровня всегда имеют хотя бы одну primary-категорию.
+          if (
+            node.entryType === 'model' &&
+            Array.isArray(node.categories) &&
+            node.categories.length > 0 &&
+            !node.categories.some(c => c.primary)
+          ) continue;
           // Отряд или модель — добавляем в результат.
           // В children находится состав отряда, а не отдельные юниты → не рекурсируем.
           result.push(isAlliedSection ? { ...node, _isAllied: true } : node);
