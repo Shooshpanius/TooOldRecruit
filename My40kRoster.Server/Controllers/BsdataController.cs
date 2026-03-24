@@ -109,16 +109,15 @@ namespace My40kRoster.Server.Controllers
         // Прокси к эндпоинту wh40kAPI, возвращающему условия детачмента для юнитов фракции.
         // wh40kAPI возвращает [{unitId, detachmentIds[]}] — список юнитов, доступных только
         // при определённых детачментах (на основе entryLink-модификаторов из BSData .cat-файлов).
-        // До реализации этого эндпоинта в wh40kAPI возвращает пустой массив [];
-        // клиент в этом случае использует статический DETACHMENT_EXCLUSIVE_UNITS как резервный источник.
-        // Задача для wh40kAPI: https://github.com/Shooshpanius/wh40kAPI/issues/
+        // Реализовано в wh40kAPI@8cc4caa. При ошибке upstream возвращает 200 с пустым массивом —
+        // клиент в этом случае не применяет фильтрацию по детачменту.
         [HttpGet("fractions/{id}/detachment-conditions")]
         public async Task<IActionResult> GetFractionDetachmentConditions(string id)
         {
             var client = httpClientFactory.CreateClient("wh40kapi");
             using var response = await client.GetAsync($"fractions/{Uri.EscapeDataString(id)}/detachment-conditions").ConfigureAwait(false);
-            // Если wh40kAPI ещё не реализовал эндпоинт — возвращаем пустой массив.
-            // Клиент при получении [] автоматически использует статический DETACHMENT_EXCLUSIVE_UNITS.
+            // При ошибке upstream (например, недоступность сети) — возвращаем пустой массив.
+            // Клиент при получении [] не применяет фильтрацию по детачменту.
             if (!response.IsSuccessStatusCode)
                 return new ContentResult { Content = "[]", ContentType = "application/json; charset=utf-8", StatusCode = 200 };
             var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
