@@ -326,6 +326,17 @@ const FACTION_OWN_CATALOGUE_IDS: Record<string, string[]> = {
     'b45c-af22-788a-dfd6', // Chaos - Daemons Library
     '7481-280e-b55e-7867', // Library - Titans
   ],
+  // ── Chaos - Death Guard (5108-f98-63c2-53cb) ─────────────────────────────
+  // catalogueLinks с importRootEntries="true":
+  //   • Chaos - Daemons Library — все хаосовские демоны (включая Нурглитских),
+  //     доступные Death Guard как собственные отряды (не Allied).
+  //   • Chaos Space Marines Legends — Heretic Astartes Legends-юниты
+  //     (Decimator, Deredeo Dreadnought, Typhon и др.): собственные Legends-отряды DG.
+  // Источник: Chaos - Death Guard.cat (github.com/BSData/wh40k-10e)
+  '5108-f98-63c2-53cb': [
+    'b45c-af22-788a-dfd6', // Chaos - Daemons Library
+    'ac3b-689c-4ad4-70cb', // Chaos Space Marines Legends
+  ],
   // ── Imperium - Imperial Knights (25dd-7aa0-6bf4-f2d5) ────────────────────
   // catalogueLinks с importRootEntries="true":
   '25dd-7aa0-6bf4-f2d5': [
