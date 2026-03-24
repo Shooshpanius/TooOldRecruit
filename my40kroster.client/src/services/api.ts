@@ -286,6 +286,16 @@ const DEFAULT_UNITS: Unit[] = [
   { id: 'unit-18', name: 'Drop Pod', category: 'Dedicated Transport', cost: 65 },
 ];
 
+// Юниты, безусловно скрытые вне зависимости от поля hidden в данных BSData.
+// Используется для отрядов, выведенных из игры, у которых поле hidden в данных
+// wh40kAPI ещё не обновлено.
+// Источник: BSData — отряды Unaligned Forces, снятые с производства.
+const FORCE_HIDDEN_UNIT_IDS = new Set<string>([
+  'a5c2-3951-e727-b64a', // Breaching Robot
+  '61f3-ff33-ec7a-3546', // Searchlight
+  '983d-b163-dc9f-3c54', // Sentry Gun
+]);
+
 // Резервная карта взаимоисключающих групп по id контейнера.
 // Ключ — id контейнера, значение — массив групп (каждая группа = список id моделей, из которых можно выбрать максимум одну).
 // В BSData взаимоисключение кодируется через modifier type="set" field="hidden" value="true"
@@ -770,6 +780,8 @@ export async function getUnits(factionId: string, detachmentId?: string, options
           || (node.catalogueId != null && node.catalogueId !== '' && !ownCatalogueIds.has(node.catalogueId));
 
         if (node.entryType === 'unit' || node.entryType === 'model') {
+          // Безусловно пропускаем юниты из списка FORCE_HIDDEN_UNIT_IDS (выведены из игры).
+          if (node.id && FORCE_HIDDEN_UNIT_IDS.has(node.id)) continue;
           // Пропускаем отряды/модели, скрытые по умолчанию и не разблокированные текущим детачментом.
           // (Механизм через modifierGroups в данных wh40kAPI — если API вернул hidden=true с условиями.)
           if (node.hidden === true && !isUnlockedByDetachment(node, detachmentId)) continue;
