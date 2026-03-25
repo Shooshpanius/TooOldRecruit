@@ -842,14 +842,21 @@ export async function getUnits(factionId: string, detachmentId?: string, options
           // у них либо пустой массив categories [], либо есть категории, но ни одна не помечена primary.
           // Самостоятельные узлы верхнего уровня всегда имеют хотя бы одну primary-категорию.
           //
-          // Исключение: если узел идентифицирован как Allied (isAlliedSection=true), его categories
-          // могли быть удалены на depth≥1 в /unitsList. В таком случае это самостоятельный
-          // Allied-юнит (например, Knight Despoiler, War Dog), а не компонентная модель.
+          // Исключение: если узел идентифицирован как Allied (isAlliedSection=true) И classificationMap
+          // содержит primary-категорию для этого узла — значит, это самостоятельный Allied-юнит,
+          // чьи categories были удалены на depth≥1 в /unitsList (например, Knight Despoiler, War Dog).
+          // Если classificationMap недоступна или не содержит primary-категорию — узел является
+          // компонентной моделью-артефактом и должен быть пропущен независимо от Allied-контекста.
+          // (При classificationMap=null возвращается true: исходное поведение, пропускаем
+          //  только если !isAlliedSection, как было раньше.)
+          const isStandaloneAlliedUnit = classificationMap != null && node.id != null
+            ? (classificationMap.get(node.id)?.categories.some(c => c.primary) ?? true)
+            : true;
           if (
             node.entryType === 'model' &&
             Array.isArray(node.categories) &&
             !node.categories.some(c => c.primary) &&
-            !isAlliedSection
+            (!isAlliedSection || !isStandaloneAlliedUnit)
           ) continue;
           // Для юнитов из каталога Unaligned Forces в союзном контексте допустимы только записи,
           // у которых primary-категория строго равна "Allied Units".
