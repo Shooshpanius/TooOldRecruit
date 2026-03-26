@@ -897,46 +897,8 @@ export async function getUnits(factionId: string, detachmentId?: string, options
       rootNodes = [];
     }
 
-    let items: ApiUnitItem[] = collectUnits(rootNodes);
+    const items: ApiUnitItem[] = collectUnits(rootNodes);
     if (items.length === 0) return DEFAULT_UNITS;
-
-    // Фильтрация союзных демонов по богу-покровителю фракции (правило Daemonic Pact).
-    // Для фракций с единственным богом-покровителем (Death Guard → Nurgle,
-    // World Eaters → Khorne, Thousand Sons → Tzeentch, Emperor's Children → Slaanesh)
-    // отображаем только союзных демонов соответствующего бога.
-    //
-    // Бог-покровитель определяется по категориям «собственных» (не Allied) юнитов фракции.
-    // Если у фракции ровно один бог-покровитель, союзные юниты с категорией другого бога
-    // исключаются. Юниты без бого-принадлежности (undivided) остаются без изменений.
-    //
-    // Фракции без явного бога (CSM, Chaos Daemons с несколькими богами) или фракции без
-    // союзных демонов не затрагиваются (patronGods.size !== 1).
-    //
-    // Примечание: полное решение (исключение undivided-демонов) требует изменений в wh40kAPI
-    // для фильтрации юнитов из non-importRootEntries library catalogues по entryLinks фракции.
-    // Документация: docs/wh40kAPI-fix-allied-units-non-import-library.md
-    {
-      const chaosGodNames = ['Nurgle', 'Khorne', 'Tzeentch', 'Slaanesh'];
-      const patronGods = new Set<string>();
-      for (const unit of items) {
-        if (unit._isAllied) continue;
-        for (const cat of unit.categories ?? unit.unitCategories ?? []) {
-          if (cat.name && chaosGodNames.includes(cat.name)) patronGods.add(cat.name);
-        }
-      }
-      if (patronGods.size === 1) {
-        const patronGod = [...patronGods][0];
-        items = items.filter(unit => {
-          if (!unit._isAllied) return true;
-          const cats = unit.categories ?? unit.unitCategories ?? [];
-          const hasGodAffiliation = cats.some(c => c.name && chaosGodNames.includes(c.name));
-          // Союзные юниты без явной бого-принадлежности (undivided) — оставляем
-          if (!hasGodAffiliation) return true;
-          return cats.some(c => c.name === patronGod);
-        });
-      }
-    }
-
     const toNum = (v: unknown): number | undefined => {
       if (v === null || v === undefined || v === '') return undefined;
       const n = Number(v);
